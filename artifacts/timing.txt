@@ -1,0 +1,9 @@
+build_seconds=0.67
+qemu_to_loader_banner_ms=3052
+qemu_to_exit_boot_services_ms=
+qemu_to_handoff_ms=
+qemu_to_kernel_banner_ms=
+qemu_to_kernel_halt_ms=
+drive_interface=virtio
+firmware=/usr/share/OVMF/OVMF_CODE_4M.fd
+run_utc=2026-11-08T21:19:19Z

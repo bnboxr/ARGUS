@@ -34,7 +34,7 @@ pub fn is_error(status: Status) -> bool {
 /// `EFI_GUID`. Laid out exactly as the specification defines it: a `GUID` on
 /// the wire, 16 bytes, little-endian in the first three fields.
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Guid {
     pub d1: u32,
     pub d2: u16,
@@ -270,3 +270,82 @@ pub const EFI_LOCATE_BY_PROTOCOL: u32 = 2;
 
 // Memory type constants used when allocating our own buffers.
 pub const EFI_LOADER_DATA: u32 = 2;
+
+/// `EFI_ALLOCATE_TYPE::AllocateAnyPages` — "anywhere you like".
+pub const EFI_ALLOCATE_ANY_PAGES: u32 = 0;
+
+// ---------------------------------------------------------------------------
+// ACPI configuration tables.
+//
+// The firmware publishes the ACPI root (RSDP) through the system table's
+// configuration table array rather than through a protocol, because ACPI is
+// not a UEFI protocol. Two GUIDs exist: the ACPI 2.0+ one, which points at a
+// full RSDP with an XSDT, and the legacy 1.0 one. We prefer the former and
+// fall back to the latter, recording which we got in `rsdp_revision`.
+// ---------------------------------------------------------------------------
+
+/// `EFI_ACPI_TABLE_GUID` (ACPI 1.0 RSDP, `Revision` 0, 20-byte checksum).
+pub const ACPI_TABLE_GUID: Guid = Guid::new(
+    0xEB9D2D30,
+    0x2D88,
+    0x11D3,
+    [0x9A, 0x16, 0x00, 0x90, 0x27, 0x3F, 0xC1, 0x4D],
+);
+
+/// `EFI_ACPI_20_TABLE_GUID` (ACPI 2.0+ RSDP, `Revision` >= 2, 36-byte checksum).
+pub const ACPI_20_TABLE_GUID: Guid = Guid::new(
+    0x8868E871,
+    0xE4F1,
+    0x11D3,
+    [0xBC, 0x22, 0x00, 0x80, 0xC7, 0x3C, 0x88, 0x81],
+);
+
+/// `EFI_CONFIGURATION_TABLE` — one entry per configuration table GUID.
+#[repr(C)]
+pub struct ConfigurationTable {
+    pub vendor_guid: Guid,
+    pub vendor_table: *mut c_void,
+}
+
+/// `EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID`.
+pub const GRAPHICS_OUTPUT_PROTOCOL: Guid = Guid::new(
+    0x9042A9DE,
+    0x23DC,
+    0x4A38,
+    [0x96, 0xFB, 0x7A, 0xDE, 0xD0, 0x80, 0x51, 0x6A],
+);
+
+/// `EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE`.
+#[repr(C)]
+pub struct GopMode {
+    pub max_mode: u32,
+    pub mode: u32,
+    pub info: *mut GopModeInfo,
+    pub size_of_info: usize,
+    pub framebuffer_base: PhysAddr,
+    pub framebuffer_size: usize,
+}
+
+/// `EFI_GRAPHICS_OUTPUT_MODE_INFORMATION`. Only the fields we report.
+#[repr(C)]
+pub struct GopModeInfo {
+    pub version: u32,
+    pub horizontal_resolution: u32,
+    pub vertical_resolution: u32,
+    /// `EFI_GRAPHICS_PIXEL_FORMAT`.
+    pub pixel_format: u32,
+    /// `EFI_PIXEL_BITMASK` (16 bytes), only meaningful for `BitMask`.
+    pub pixel_bitmask: [u32; 4],
+    pub pixels_per_scan_line: u32,
+}
+
+/// `EFI_GRAPHICS_OUTPUT_PROTOCOL`. Only `Mode` is read; the three function
+/// pointers are declared as `usize` slots to keep the offsets right without
+/// writing types we never call.
+#[repr(C)]
+pub struct GraphicsOutput {
+    pub query_mode: usize,
+    pub set_mode: usize,
+    pub blt: usize,
+    pub mode: *mut GopMode,
+}

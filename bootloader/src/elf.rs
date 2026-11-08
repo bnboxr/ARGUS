@@ -144,6 +144,10 @@ pub struct KernelImage {
     pub segment_count: usize,
     /// Sum of `p_filesz` — bytes actually copied.
     pub image_bytes: u64,
+    /// ELF `e_phnum`: how many program headers the file carried, loadable or
+    /// not. Reported in `BootInfo` so the kernel can size its page tables from
+    /// the real header count instead of guessing from the loadable segments.
+    pub phnum: u32,
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +208,7 @@ fn range_is_usable(regions: &[MemoryRegion], start: u64, len: u64) -> bool {
     }
     regions.iter().any(|r| {
         memory_type::is_usable_for_kernel(r.region_type)
-            && start >= r.physical_start
+            && start >= r.phys_start
             && end <= r.end()
     })
 }
@@ -379,5 +383,6 @@ pub fn validate(
         file_offsets,
         segment_count: count,
         image_bytes,
+        phnum: e_phnum as u32,
     })
 }

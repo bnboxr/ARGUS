@@ -1,38 +1,73 @@
 #!/usr/bin/env bash
-# Negative tests: each corrupted kernel must be rejected with its own code and
-# the loader must NOT jump.
 #
-# STATUS: written, NOT yet run to completion — see README "STATUS". It is kept
-# so the next session does not have to re-derive the corruption offsets.
+# Negative tests: a corrupted kernel must be rejected with its own named error
+# code, the loader must NOT jump to it, and `run.sh` must exit non-zero.
+#
+#   ./tests/negative-tests.sh
+#
+# Cases, each corrupting exactly one thing:
+#   1. bad e_ident magic            -> E_MAGIC
+#   2. truncated program header table -> E_PHDR_TRUNCATED
+#   3. p_vaddr outside usable RAM   -> E_VADDR_UNUSABLE
+#   4. kernel file absent           -> the loader's own "not found" path
+#
+# Each case builds its own copy of the disk image, so nothing here can leave a
+# corrupted kernel behind in dist/.
+
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-KERNEL="${CARGO_TARGET_DIR:-$ROOT/target}/x86_64-unknown-none/release/argus-kernel"
-[ -f "$KERNEL" ] || { echo "build first: ./build.sh"; exit 2; }
-WORK="$ROOT/artifacts/negative"; rm -rf "$WORK"; mkdir -p "$WORK"
-python3 tests/corrupt.py "$KERNEL" "$WORK"
+# shellcheck source=tests/lib.sh
+. "$ROOT/tests/lib.sh"
 
-fail=0
-run_case() { # file expected_code
-    local f="$1" code="$2"
-    local img="$WORK/case.img"
-    cp dist/argus-disk.img "$img"
-    MTOOLS_SKIP_CHECK=1 mcopy -o -i "$img@@1M" "$f" ::/ARGUSKRN.ELF
-    cp /usr/share/OVMF/OVMF_VARS_4M.fd "$WORK/v.fd"
-    timeout 20 qemu-system-x86_64 -machine q35 -m 128M -cpu max \
-      -drive if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
-      -drive if=pflash,format=raw,unit=1,file="$WORK/v.fd" \
-      -drive "file=$img,format=raw,if=virtio" \
-      -serial file:"$WORK/$code.log" -display none -no-reboot >/dev/null 2>&1
-    if ! grep -q "code=$code" "$WORK/$code.log"; then
-        echo "FAIL $code: expected rejection code not found"; fail=1; return
+KERNEL="${CARGO_TARGET_DIR:-$ROOT/target}/x86_64-unknown-none/release/argus-kernel"
+if [ ! -f "$KERNEL" ]; then
+    # build.sh may have used a different target dir; fall back to dist/.
+    KERNEL="$ROOT/dist/ARGUSKRN.ELF"
+fi
+[ -f "$KERNEL" ] || { echo "build first: ./build.sh"; exit 2; }
+[ -f "$ROOT/dist/argus-disk.img" ] || { echo "build first: ./build.sh"; exit 2; }
+
+WORK="$WORK_ROOT/elf"
+rm -rf "$WORK"; mkdir -p "$WORK"
+python3 "$ROOT/tests/corrupt.py" "$KERNEL" "$WORK" >/dev/null
+
+printf '\033[1m[negative] corrupted-ELF tests\033[0m\n'
+
+run_case() { # <name> <file|-> <expected-code> <expected-detail-substring>
+    local name="$1" file="$2" code="$3" detail="$4"
+    local dir="$WORK/$name"
+    local img
+    img="$(new_image "$dir")"
+
+    if [ "$file" = "-" ]; then
+        remove_kernel "$img"
+    else
+        put_kernel "$img" "$file"
     fi
-    if grep -q "ARGUS-KERNEL.*event=banner" "$WORK/$code.log"; then
-        echo "FAIL $code: kernel ran on a rejected image"; fail=1; return
+
+    local rc
+    rc="$(boot "$dir" "$name")"
+    local log="$dir/$name.log"
+
+    printf '\n-- %s (expecting %s) --\n' "$name" "$code"
+    expect_nonzero "$rc" "$name"
+    if [ -n "$code" ]; then
+        expect_contains "$log" "code=$code" "$name"
+    else
+        expect_contains "$log" "stage=kernel-read event=fail" "$name loader refused the read"
     fi
-    echo "PASS $code"
+    if [ -n "$detail" ]; then
+        expect_contains "$log" "$detail" "$name detail"
+    fi
+    expect_absent "$log" "[ARGUS-KERNEL] stage=entry event=banner" "$name no kernel banner"
+    expect_absent "$log" "stage=handoff event=jump" "$name no handoff"
+    show_evidence "$log" "elf-validate|stage=handoff result=REFUSED|stage=kernel-read event=fail|reason=" "$name"
 }
-run_case "$WORK/bad-magic.elf"        E_MAGIC
-run_case "$WORK/truncated-phdr.elf"   E_PHDR_TRUNCATED
-run_case "$WORK/vaddr-unusable.elf"   E_VADDR_UNUSABLE
-exit $fail
+
+run_case bad-magic        "$WORK/bad-magic.elf"        E_MAGIC            "e_ident"
+run_case truncated-phdr   "$WORK/truncated-phdr.elf"   E_PHDR_TRUNCATED   "program header"
+run_case vaddr-unusable   "$WORK/vaddr-unusable.elf"   E_VADDR_UNUSABLE   "usable"
+run_case kernel-missing   "-"                          ""                 ""
+
+summary "negative-tests"

@@ -11,9 +11,12 @@
 //! 1. zeroes `.bss` and switches to its own stack (assembly trampoline below)
 //! 2. brings up COM1 independently of UEFI
 //! 3. prints a banner
-//! 4. validates the `BootInfo` magic and version
-//! 5. walks and prints every field of `BootInfo`
-//! 6. halts forever in `hlt`
+//! 4. validates `BootInfo`: magic, ABI version, ABI size, then the CRC-32 that
+//!    covers every field — and refuses to continue if any of them is wrong
+//! 5. walks and prints every field of `BootInfo`, including the ten groups the
+//!    capability model requires (`BOOTINFO.md`)
+//! 6. checks the initrd image's magic at the address the loader gave it
+//! 7. halts forever in `hlt`
 //!
 //! No allocator, no heap, no dynamic allocation — there is nothing here that
 //! could allocate, and `deps.md` lists zero crates.
@@ -28,7 +31,12 @@ use argus_shared::bootinfo::{self, memory_type, BootInfo};
 use argus_shared::serial::{Serial, COM1};
 
 /// Version of the kernel side, printed in the banner.
-const KERNEL_VERSION: &str = "0.1.0";
+const KERNEL_VERSION: &str = "0.2.0";
+
+/// The first 8 bytes `build.sh` writes into `INITRD.BIN`. Finding these at
+/// `initrd_phys` proves the loader really copied the file there, rather than
+/// reporting an address and hoping.
+const INITRD_MAGIC: &[u8; 8] = b"ARGUSIRD";
 
 // ---------------------------------------------------------------------------
 // Entry trampoline.
@@ -107,9 +115,9 @@ pub extern "C" fn kmain(bootinfo: *const BootInfo) -> ! {
 
     let _ = writeln!(
         ser,
-        "[ARGUS-KERNEL] stage=entry event=start name=ARGUS kernel=x86_64 version={} bootinfo_version={} uart_present={}",
+        "[ARGUS-KERNEL] stage=entry event=start name=ARGUS kernel=x86_64 version={} abi_version={} uart_present={}",
         KERNEL_VERSION,
-        bootinfo::BOOTINFO_VERSION,
+        bootinfo::ABI_VERSION,
         uart_present as u8
     );
     let _ = writeln!(
@@ -136,31 +144,69 @@ pub extern "C" fn kmain(bootinfo: *const BootInfo) -> ! {
 
     let _ = writeln!(
         ser,
-        "[ARGUS-KERNEL] stage=bootinfo event=received address=0x{:x} magic=0x{:x} version={} size={}",
-        bootinfo as usize, bi.magic, bi.version, bi.size
+        "[ARGUS-KERNEL] stage=bootinfo event=received address=0x{:x} magic=0x{:x} abi_version={} abi_size={}",
+        bootinfo as usize, bi.magic, bi.abi_version, bi.abi_size
     );
 
+    // ---- validation, cheapest and most fundamental first -------------------
     if !bi.is_compatible() {
         let _ = writeln!(
             ser,
-            "[ARGUS-KERNEL] stage=bootinfo event=fail reason=incompatible expected_magic=0x{:x} expected_version={}",
+            "[ARGUS-KERNEL] stage=bootinfo event=fail reason=E_BOOTINFO_MAGIC carried_magic=0x{:x} expected_magic=0x{:x} carried_abi={} expected_abi={}",
+            bi.magic,
             bootinfo::BOOTINFO_MAGIC,
-            bootinfo::BOOTINFO_VERSION
+            bi.abi_version,
+            bootinfo::ABI_VERSION
         );
         halt();
     }
 
-    if bi.size as usize != core::mem::size_of::<BootInfo>() {
+    // The size check comes before the checksum: computing a checksum over a
+    // length the loader supplied would read memory this kernel does not own.
+    let expected_size = core::mem::size_of::<BootInfo>() as u32;
+    if bi.abi_size != expected_size {
         let _ = writeln!(
             ser,
-            "[ARGUS-KERNEL] stage=bootinfo event=fail reason=size_mismatch kernel_size={} loader_size={}",
-            core::mem::size_of::<BootInfo>(),
-            bi.size
+            "[ARGUS-KERNEL] stage=bootinfo event=fail reason=E_BOOTINFO_SIZE kernel_abi_size={} loader_abi_size={}",
+            expected_size, bi.abi_size
         );
         halt();
     }
 
-    // ---- walk every field ------------------------------------------------
+    let (carried, computed) = bi.verify_checksum();
+    if carried != computed {
+        let _ = writeln!(
+            ser,
+            "[ARGUS-KERNEL] stage=bootinfo event=fail reason=E_BOOTINFO_CHECKSUM carried=0x{:08x} computed=0x{:08x}",
+            carried, computed
+        );
+        let _ = writeln!(
+            ser,
+            "[ARGUS-KERNEL] stage=bootinfo event=REFUSED reason=checksum_mismatch note=\"a field changed after the loader sealed the structure\""
+        );
+        let _ = writeln!(
+            ser,
+            "[ARGUS-KERNEL] stage=halt event=refused reason=E_BOOTINFO_CHECKSUM boot_proven=0"
+        );
+        halt();
+    }
+    let _ = writeln!(
+        ser,
+        "[ARGUS-KERNEL] stage=bootinfo event=checksum_ok carried=0x{:08x} computed=0x{:08x} covered_bytes={}",
+        carried, computed, expected_size
+    );
+
+    let unknown_flags = bi.flags & !bootinfo::FLAG_KNOWN_MASK;
+    if unknown_flags != 0 {
+        let _ = writeln!(
+            ser,
+            "[ARGUS-KERNEL] stage=bootinfo event=fail reason=E_BOOTINFO_UNKNOWN_FLAGS mask=0x{:x}",
+            unknown_flags
+        );
+        halt();
+    }
+
+    // ---- header ----------------------------------------------------------
     let _ = writeln!(
         ser,
         "[ARGUS-KERNEL] stage=bootinfo field=magic value=0x{:x}",
@@ -168,14 +214,32 @@ pub extern "C" fn kmain(bootinfo: *const BootInfo) -> ! {
     );
     let _ = writeln!(
         ser,
-        "[ARGUS-KERNEL] stage=bootinfo field=version value={}",
-        bi.version
+        "[ARGUS-KERNEL] stage=bootinfo field=abi_version value={}",
+        bi.abi_version
     );
     let _ = writeln!(
         ser,
-        "[ARGUS-KERNEL] stage=bootinfo field=size value={}",
-        bi.size
+        "[ARGUS-KERNEL] stage=bootinfo field=abi_size value={}",
+        bi.abi_size
     );
+    let _ = writeln!(
+        ser,
+        "[ARGUS-KERNEL] stage=bootinfo field=flags value=0x{:x} memmap_clamped={} reserved_clamped={} framebuffer={} acpi={} initrd={} test_corrupted={}",
+        bi.flags,
+        ((bi.flags & bootinfo::FLAG_MEMMAP_CLAMPED) != 0) as u8,
+        ((bi.flags & bootinfo::FLAG_LOADER_RESERVED_CLAMPED) != 0) as u8,
+        ((bi.flags & bootinfo::FLAG_FRAMEBUFFER_PRESENT) != 0) as u8,
+        ((bi.flags & bootinfo::FLAG_ACPI_PRESENT) != 0) as u8,
+        ((bi.flags & bootinfo::FLAG_INITRD_PRESENT) != 0) as u8,
+        ((bi.flags & bootinfo::FLAG_TEST_CORRUPTED) != 0) as u8
+    );
+    let _ = writeln!(
+        ser,
+        "[ARGUS-KERNEL] stage=bootinfo field=checksum value=0x{:08x} verified=1",
+        bi.checksum
+    );
+
+    // ---- timing and kernel identity --------------------------------------
     let _ = writeln!(
         ser,
         "[ARGUS-KERNEL] stage=bootinfo field=boot_tsc value=0x{:x}",
@@ -193,37 +257,20 @@ pub extern "C" fn kmain(bootinfo: *const BootInfo) -> ! {
     );
     let _ = writeln!(
         ser,
-        "[ARGUS-KERNEL] stage=bootinfo field=segment_count value={}",
-        bi.segment_count
-    );
-    let _ = writeln!(
-        ser,
-        "[ARGUS-KERNEL] stage=bootinfo field=memory_region_count value={}",
-        bi.memory_region_count
-    );
-    let _ = writeln!(
-        ser,
-        "[ARGUS-KERNEL] stage=bootinfo field=memory_region_capacity value={}",
-        bi.memory_region_capacity
-    );
-    let _ = writeln!(
-        ser,
-        "[ARGUS-KERNEL] stage=bootinfo field=system_table value=0x{:x}",
-        bi.system_table
-    );
-    let _ = writeln!(
-        ser,
-        "[ARGUS-KERNEL] stage=bootinfo field=serial_port value=0x{:x}",
-        bi.serial_port
-    );
-    let _ = writeln!(
-        ser,
-        "[ARGUS-KERNEL] stage=bootinfo field=flags value=0x{:x} memmap_clamped={}",
-        bi.flags,
-        (bi.flags & bootinfo::FLAG_MEMMAP_CLAMPED) as u32
+        "[ARGUS-KERNEL] stage=bootinfo field=segment_count value={} kernel_phnum={}",
+        bi.segment_count, bi.kernel_phnum
     );
 
-    // ---- segments --------------------------------------------------------
+    // ---- field 6: where the kernel physically is --------------------------
+    let _ = writeln!(
+        ser,
+        "[ARGUS-KERNEL] stage=bootinfo field=kernel_phys start=0x{:x} len=0x{:x} end=0x{:x} phnum={}",
+        bi.kernel_phys_start,
+        bi.kernel_phys_len,
+        bi.kernel_phys_start + bi.kernel_phys_len,
+        bi.kernel_phnum
+    );
+
     let seg_count = (bi.segment_count as usize).min(bootinfo::MAX_SEGMENTS);
     for i in 0..seg_count {
         let s = bi.segments[i];
@@ -234,30 +281,138 @@ pub extern "C" fn kmain(bootinfo: *const BootInfo) -> ! {
         );
     }
 
-    // ---- memory map ------------------------------------------------------
+    // ---- field 1, 2: the memory map --------------------------------------
+    let _ = writeln!(
+        ser,
+        "[ARGUS-KERNEL] stage=bootinfo field=memory_map_meta count={} capacity={} desc_size={} desc_version=0x{:x} map_key=0x{:x}",
+        bi.memory_region_count,
+        bi.memory_region_capacity,
+        bi.map_desc_size,
+        bi.map_desc_version,
+        bi.map_key
+    );
+
     let region_count = (bi.memory_region_count as usize).min(bootinfo::MAX_MEMORY_REGIONS);
     let mut usable = 0u64;
     for i in 0..region_count {
         let r = bi.memory_regions[i];
         if memory_type::is_usable_for_kernel(r.region_type) {
-            usable += r.page_count * 4096;
+            usable += r.phys_len;
         }
         let _ = writeln!(
             ser,
-            "[ARGUS-KERNEL] stage=bootinfo field=memory_regions[{}] type={} name={} start=0x{:x} pages={} end=0x{:x} attr=0x{:x}",
+            "[ARGUS-KERNEL] stage=bootinfo field=memory_regions[{}] type={} name={} start=0x{:x} len=0x{:x} end=0x{:x} uefi_attribs=0x{:x}",
             i,
             r.region_type,
             memory_type::name(r.region_type),
-            r.physical_start,
-            r.page_count,
+            r.phys_start,
+            r.phys_len,
             r.end(),
-            r.attributes
+            r.uefi_attribs
         );
     }
     let _ = writeln!(
         ser,
         "[ARGUS-KERNEL] stage=bootinfo event=summary regions={} usable_bytes=0x{:x}",
         region_count, usable
+    );
+
+    // ---- field 3: ACPI ----------------------------------------------------
+    let _ = writeln!(
+        ser,
+        "[ARGUS-KERNEL] stage=bootinfo field=acpi present={} rsdp_phys=0x{:x} rsdp_checksum=0x{:02x} revision={}",
+        bi.acpi_present, bi.rsdp_phys, bi.rsdp_checksum, bi.rsdp_revision
+    );
+    if bi.acpi_present != 0 && bi.rsdp_phys != 0 {
+        // The loader validated this table's checksum; re-read the signature
+        // here so the kernel proves the address it was handed really points at
+        // an RSDP and is not just a plausible number.
+        // SAFETY: the loader verified this physical address is the RSDP the
+        // firmware published, it is identity-mapped (we have no page tables
+        // yet), and reading 8 bytes of a 36-byte table cannot fault.
+        let sig = unsafe { core::slice::from_raw_parts(bi.rsdp_phys as *const u8, 8) };
+        let _ = writeln!(
+            ser,
+            "[ARGUS-KERNEL] stage=bootinfo event=acpi_readback signature=\"{}\" match={}",
+            if &sig[0..7] == b"RSD PTR" { "RSD PTR" } else { "BAD" },
+            (&sig[0..8] == b"RSD PTR ") as u8
+        );
+    }
+
+    // ---- field 4: framebuffer --------------------------------------------
+    let fb = bi.framebuffer;
+    let _ = writeln!(
+        ser,
+        "[ARGUS-KERNEL] stage=bootinfo field=framebuffer present={} phys=0x{:x} width={} height={} stride={} pixel_format={} name={} size_bytes=0x{:x}",
+        ((bi.flags & bootinfo::FLAG_FRAMEBUFFER_PRESENT) != 0) as u8,
+        fb.phys,
+        fb.width,
+        fb.height,
+        fb.stride,
+        fb.pixel_format,
+        bootinfo::pixel_format::name(fb.pixel_format),
+        fb.size_bytes
+    );
+
+    // ---- field 5: initrd --------------------------------------------------
+    let _ = writeln!(
+        ser,
+        "[ARGUS-KERNEL] stage=bootinfo field=initrd phys=0x{:x} len=0x{:x}",
+        bi.initrd_phys, bi.initrd_len
+    );
+    if bi.initrd_phys != 0 && bi.initrd_len >= 8 {
+        // SAFETY: the loader allocated these pages for the initrd and copied
+        // `initrd_len` bytes into them; the memory is identity-mapped and we
+        // read the first 8 bytes of a buffer we were told is at least that big.
+        let head = unsafe { core::slice::from_raw_parts(bi.initrd_phys as *const u8, 8) };
+        let _ = writeln!(
+            ser,
+            "[ARGUS-KERNEL] stage=bootinfo event=initrd_readback magic_match={} expected=ARGUSIRD",
+            (head == INITRD_MAGIC) as u8
+        );
+    }
+
+    // ---- field 7: loader reservations ------------------------------------
+    let reserved_count = (bi.loader_reserved_count as usize).min(bootinfo::MAX_LOADER_RESERVED);
+    for i in 0..reserved_count {
+        let r = bi.loader_reserved[i];
+        let _ = writeln!(
+            ser,
+            "[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[{}] kind={} name={} start=0x{:x} len=0x{:x} end=0x{:x}",
+            i,
+            r.kind,
+            bootinfo::reservation_kind::name(r.kind),
+            r.start,
+            r.len,
+            r.start + r.len
+        );
+    }
+    let _ = writeln!(
+        ser,
+        "[ARGUS-KERNEL] stage=bootinfo field=loader_reserved_count value={} capacity={}",
+        bi.loader_reserved_count, bi.loader_reserved_capacity
+    );
+
+    // ---- field 8: boot slot and reason -----------------------------------
+    let _ = writeln!(
+        ser,
+        "[ARGUS-KERNEL] stage=bootinfo field=boot_slot value={} boot_reason={} boot_reason_name={}",
+        bi.boot_slot,
+        bi.boot_reason,
+        bootinfo::boot_reason::name(bi.boot_reason)
+    );
+
+    // ---- field 9: debug serial -------------------------------------------
+    let _ = writeln!(
+        ser,
+        "[ARGUS-KERNEL] stage=bootinfo field=debug_serial base_port=0x{:x} baud={} present={}",
+        bi.debug_serial.base_port, bi.debug_serial.baud, bi.debug_serial.present
+    );
+
+    let _ = writeln!(
+        ser,
+        "[ARGUS-KERNEL] stage=bootinfo field=system_table value=0x{:x}",
+        bi.system_table
     );
 
     // ---- prove we are where we think we are ------------------------------
@@ -267,16 +422,18 @@ pub extern "C" fn kmain(bootinfo: *const BootInfo) -> ! {
     let start_addr = _start as *const () as u64;
     let _ = writeln!(
         ser,
-        "[ARGUS-KERNEL] stage=bootinfo event=placement _start=0x{:x} first_segment_paddr=0x{:x} match={}",
+        "[ARGUS-KERNEL] stage=bootinfo event=placement _start=0x{:x} first_segment_paddr=0x{:x} kernel_phys_start=0x{:x} match={}",
         start_addr,
         bi.segments[0].paddr,
-        (start_addr == bi.segments[0].paddr) as u8
+        bi.kernel_phys_start,
+        (start_addr == bi.segments[0].paddr && start_addr == bi.kernel_phys_start) as u8
     );
 
     let _ = writeln!(ser, "[ARGUS-KERNEL] stage=halt event=ready state=loop_hlt");
     let _ = writeln!(
         ser,
-        "[ARGUS-KERNEL] stage=halt event=boot_proven kernel_banner=1 bootinfo_dumped=1"
+        "[ARGUS-KERNEL] stage=halt event=boot_proven kernel_banner=1 bootinfo_dumped=1 bootinfo_checksum=ok abi_version={}",
+        bi.abi_version
     );
 
     halt()

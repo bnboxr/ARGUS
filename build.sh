@@ -26,7 +26,9 @@ cd "$ROOT"
 
 BOOT_TARGET="x86_64-unknown-uefi"
 KERNEL_TARGET="x86_64-unknown-none"
-DIST="$ROOT/dist"
+# ARGUS_DIST lets a test build into its own directory without touching the
+# real dist/. Only `tests/bootinfo-checksum.sh` uses it.
+DIST="${ARGUS_DIST:-$ROOT/dist}"
 ESP="$DIST/esp"
 IMG="$DIST/argus-disk.img"
 IMG_SIZE_MB=16
@@ -50,6 +52,16 @@ export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target}"
 
 say "cargo:  $(cargo --version)"
 say "rustc:  $(rustc --version)"
+
+# Test hook: `tests/bootinfo-checksum.sh` sets this so the loader deliberately
+# corrupts one BootInfo byte after sealing it. It is a compile-time cfg, so it
+# cannot be switched on at runtime and never exists in a normal build.
+if [ "${ARGUS_TEST_CORRUPT_BOOTINFO:-0}" = "1" ]; then
+    export RUSTFLAGS="${RUSTFLAGS:-} --cfg argus_test_corrupt_bootinfo"
+    say "TEST HOOK: loader will corrupt BootInfo after sealing (--cfg argus_test_corrupt_bootinfo)"
+fi
+
+BUILD_START_NS=$(date +%s%N)
 
 for target in "$BOOT_TARGET" "$KERNEL_TARGET"; do
     if ! rustc --print target-list | grep -qx "$target"; then
@@ -90,6 +102,26 @@ cp "$KERNEL_ELF" "$ESP/ARGUSKRN.ELF"
 cp "$BOOT_EFI" "$DIST/BOOTX64.EFI"
 cp "$KERNEL_ELF" "$DIST/ARGUSKRN.ELF"
 
+# --- initrd -----------------------------------------------------------------
+#
+# A tiny initrd image, so `BootInfo.initrd_phys`/`initrd_len` carry a real
+# payload instead of zeroes and the kernel can prove the bytes landed where the
+# loader said they did. Format: 8-byte magic, u32 version, u32 payload length,
+# then the payload. Phase II replaces this with the real service images.
+say "creating initrd image"
+INITRD="$DIST/INITRD.BIN"
+INITRD_PAYLOAD="ARGUS Phase I initrd placeholder. Real service images arrive in Phase II."
+python3 - "$INITRD" "$INITRD_PAYLOAD" <<'PYEOF'
+import struct, sys
+path, payload = sys.argv[1], sys.argv[2].encode()
+data = b"ARGUSIRD" + struct.pack("<II", 1, len(payload)) + payload
+# Pad to a page so the loader's page allocation is exactly one page.
+data += b"\0" * (-len(data) % 4096)
+open(path, "wb").write(data)
+PYEOF
+[ -s "$INITRD" ] || die "initrd image not produced"
+cp "$INITRD" "$ESP/INITRD.BIN"
+
 # --- disk image -------------------------------------------------------------
 #
 # The image is a real, bootable disk: an MBR partition table with one FAT16
@@ -112,6 +144,7 @@ mmd -i "$ESP_FAT" ::/EFI
 mmd -i "$ESP_FAT" ::/EFI/BOOT
 mcopy -i "$ESP_FAT" "$ESP/EFI/BOOT/BOOTX64.EFI" ::/EFI/BOOT/BOOTX64.EFI
 mcopy -i "$ESP_FAT" "$ESP/ARGUSKRN.ELF" ::/ARGUSKRN.ELF
+mcopy -i "$ESP_FAT" "$ESP/INITRD.BIN" ::/INITRD.BIN
 
 say "creating MBR disk image $IMG (${IMG_SIZE_MB} MiB)"
 rm -f "$IMG"
@@ -140,10 +173,22 @@ echo "$(mdir -b -i "$IMG@@1M" ::/EFI/BOOT 2>/dev/null)" | grep -q "BOOTX64.EFI" 
     || die "BOOTX64.EFI missing from the ESP"
 echo "$(mdir -b -i "$IMG@@1M" ::/ 2>/dev/null)" | grep -q "ARGUSKRN.ELF" \
     || die "ARGUSKRN.ELF missing from the ESP root"
+echo "$(mdir -b -i "$IMG@@1M" ::/ 2>/dev/null)" | grep -q "INITRD.BIN" \
+    || die "INITRD.BIN missing from the ESP root"
+
+BUILD_END_NS=$(date +%s%N)
+BUILD_MS=$(( (BUILD_END_NS - BUILD_START_NS) / 1000000 ))
 
 say "OK"
 printf '\n'
 printf '  loader   %s  (%s bytes)\n' "$DIST/BOOTX64.EFI" "$(stat -c%s "$DIST/BOOTX64.EFI")"
 printf '  kernel   %s  (%s bytes)\n' "$DIST/ARGUSKRN.ELF" "$(stat -c%s "$DIST/ARGUSKRN.ELF")"
+printf '  initrd   %s  (%s bytes)\n' "$INITRD" "$(stat -c%s "$INITRD")"
 printf '  image    %s  (%s bytes)\n' "$IMG" "$(stat -c%s "$IMG")"
+printf '  build    %s s (wall clock, measured)\n' "$(awk "BEGIN{printf \"%.2f\", $BUILD_MS/1000}")"
 printf '\n  next: ./run.sh\n\n'
+
+# Machine-readable, so the report cites a measurement rather than a memory.
+printf 'build_seconds=%.2f\nbuild_finished_utc=%s\n' \
+    "$(awk "BEGIN{printf \"%.2f\", $BUILD_MS/1000}")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    > "$DIST/build-timing.txt"
