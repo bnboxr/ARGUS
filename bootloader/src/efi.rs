@@ -56,12 +56,20 @@ pub const LOADED_IMAGE_PROTOCOL: Guid = Guid::new(
     [0x8E, 0x3F, 0x00, 0xA0, 0xC9, 0x69, 0x72, 0x3B],
 );
 
-/// `EFI_SIMPLE_FILE_SYSTEM_PROTOCOL`.
+/// `EFI_SIMPLE_FILE_SYSTEM_PROTOCOL` — 964E5B22-6459-11D2-8E39-00A0C969723B.
+///
+/// This constant was wrong for two sessions (`0x9A` where the specification
+/// has `0x39`), and that single byte is why `LocateHandleBuffer` reported zero
+/// filesystem handles on a volume the firmware had just read our image from.
+/// A GUID is an opaque 128-bit value: a typo in it does not fail loudly, it
+/// just matches nothing. `tests/protocol-guid.sh` now checks every GUID in
+/// this file against the specification text so it cannot happen silently
+/// again.
 pub const SIMPLE_FILE_SYSTEM_PROTOCOL: Guid = Guid::new(
     0x964E5B22,
     0x6459,
     0x11d2,
-    [0x8E, 0x9A, 0x00, 0xA0, 0xC9, 0x69, 0x72, 0x3B],
+    [0x8E, 0x39, 0x00, 0xA0, 0xC9, 0x69, 0x72, 0x3B],
 );
 
 /// `EFI_FILE_INFO_ID`.
