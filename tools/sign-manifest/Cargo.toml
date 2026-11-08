@@ -1,0 +1,15 @@
+[package]
+name = "argus-sign-manifest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Host-side signer/verifier for ARGUS.MF boot manifests (std binary, not part of the boot path)"
+
+[[bin]]
+name = "sign-manifest"
+path = "src/main.rs"
+
+[dependencies]
+argus-security = { path = "../../security" }
+# No third-party crates: PEM/base64/DER parsing for a PKCS#1 RSA key is ~150
+# lines and keeps `cargo build` working with no network. See ../../deps.md.

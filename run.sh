@@ -9,6 +9,17 @@
 # artifacts/boot.log and also printed, with the wall-clock offset of every
 # interesting line recorded to artifacts/timing.txt.
 #
+# THE RULE, stated because it has already misled one reader:
+#   run.sh boots whatever is in dist/ RIGHT NOW. It does not build, and it does
+#   not check that dist/ is up to date. If a build failed, the previous image is
+#   still there and this script will happily boot it and exit 0 — correctly, for
+#   the image it was given, and misleadingly for the change you just made.
+#   Always: ./build.sh && ./run.sh, and look at build.sh's exit status first.
+#
+# The image is attached read-write on purpose: the loader writes \ARGUS\CONFIRM
+# before handoff and may raise \ARGUS\FLOOR on a later boot. Booting a copy is
+# what the tests do, so they never depend on the state a previous boot left.
+#
 # Exit status — this is the point of the script:
 #   0   the kernel printed its own banner, verified the BootInfo checksum, and
 #       reached its halt marker. The boot is proven, not assumed.
@@ -64,7 +75,10 @@ cp "$OVMF_VARS" "$VARS_COPY"
 
 say "firmware: $OVMF_CODE"
 say "vars:     $OVMF_VARS -> $VARS_COPY"
-say "image:    $IMG"
+say "image:    $IMG  (mtime $(date -u -r "$IMG" +%Y-%m-%dT%H:%M:%SZ), built, not rebuilt)"
+if [ -f "$DIST/ARGUS.MF" ]; then
+    say "manifest: $DIST/ARGUS.MF  ($(stat -c%s "$DIST/ARGUS.MF") bytes, signed on the host)"
+fi
 say "drive:    if=$DRIVE_IF"
 say "log:      $LOG"
 say "timeout:  ${BOOT_TIMEOUT}s"
@@ -141,6 +155,20 @@ forbid() {
     fi
 }
 
+# The security chain, in the order the loader enforces it. These are not
+# decoration: each one is a check that has a matching negative test.
+require "[ARGUS-LOADER] stage=volume event=found"
+require "[ARGUS-LOADER] stage=manifest event=key"
+require "[ARGUS-LOADER] stage=manifest event=signature result=VALID"
+require "[ARGUS-LOADER] stage=manifest event=verified result=ACCEPT"
+require "[ARGUS-LOADER] stage=floor event=enforced"
+require "[ARGUS-LOADER] stage=confirm event="
+require "[ARGUS-LOADER] stage=config result=MATCH"
+require "[ARGUS-LOADER] stage=kernel-digest result=MATCH"
+require "[ARGUS-LOADER] stage=initrd-digest result=MATCH"
+require "[ARGUS-LOADER] stage=floor event=stable"
+require "[ARGUS-LOADER] stage=confirm event=pending"
+
 # The ordered trace the loader is responsible for.
 require "[ARGUS-LOADER] stage=banner event=start"
 require "[ARGUS-LOADER] stage=memmap event=summary"
@@ -172,6 +200,11 @@ require "[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[0]"
 require "[ARGUS-KERNEL] stage=bootinfo field=boot_slot"
 require "[ARGUS-KERNEL] stage=bootinfo field=debug_serial"
 require "[ARGUS-KERNEL] stage=halt event=boot_proven"
+
+# A refusal anywhere in the security chain is a failed run, whatever else the
+# log contains. This is the single line that makes a refused boot impossible to
+# mistake for a good one.
+forbid "result=REFUSED"
 
 # A kernel that refused BootInfo must never be reported as a proven boot.
 forbid "[ARGUS-KERNEL] stage=bootinfo event=fail"

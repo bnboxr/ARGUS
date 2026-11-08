@@ -27,6 +27,8 @@
 mod efi;
 mod elf;
 mod fat;
+mod security;
+mod test_key;
 
 use core::ffi::c_void;
 use core::fmt::Write;
@@ -41,7 +43,15 @@ use argus_shared::serial::{Serial, COM1};
 use efi::*;
 
 /// Version of this loader, printed in the banner and easy to grep.
-const LOADER_VERSION: &str = "0.2.0";
+///
+/// 0.3.0 is the slice that verifies a signed manifest before it loads anything;
+/// `security::LOADER_VERSION_NUM` is the same number in the form the manifest's
+/// `min_loader_version` compares against.
+const LOADER_VERSION: &str = "0.3.0";
+
+/// Refuse to load a kernel bigger than this. The real kernel is well under a
+/// megabyte; this bounds what a hostile filesystem can make us allocate.
+const MAX_KERNEL_BYTES: usize = 16 * 1024 * 1024;
 
 /// Where the kernel ELF lives on the boot volume. Matches `build.sh`.
 const KERNEL_PATH: &str = "\\ARGUSKRN.ELF";
@@ -88,6 +98,18 @@ fn halt() -> ! {
         // what a failed boot should be: visible, not a reboot loop.
         unsafe { core::arch::asm!("cli; hlt", options(nomem, nostack)) };
     }
+}
+
+/// Print a refusal and stop. Every security failure ends here, so a refused
+/// boot always leaves both a named code and a final `stage=handoff` line on the
+/// wire, and `run.sh` can never mistake it for success.
+fn refuse(ser: &mut Serial, r: security::Refusal) -> ! {
+    let _ = writeln!(
+        ser,
+        "[ARGUS-LOADER] stage=handoff result=REFUSED reason=security_policy stage={} code={}",
+        r.stage, r.code
+    );
+    halt()
 }
 
 /// The regions the loader occupies, collected as we go and published to the
@@ -340,11 +362,17 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     // ---- stage: framebuffer ---------------------------------------------
     let fb = find_framebuffer(bs, &mut ser);
 
-    // ---- read the kernel file -------------------------------------------
+    // ---- stage: boot volume ---------------------------------------------
+    // Everything from here on needs one thing: the volume this image was
+    // booted from. If there is none, the manifest cannot be read, and a loader
+    // that cannot read the manifest cannot authenticate the kernel — so this
+    // fails closed rather than falling back to "boot anyway".
     let loaded_image = match get_loaded_image(bs, image_handle) {
         Some(li) => li,
         None => {
-            let _ = writeln!(ser, "[ARGUS-LOADER] stage=kernel-read event=fail reason=no_loaded_image_protocol");
+            let _ = writeln!(ser, "[ARGUS-LOADER] stage=volume event=absent reason=no_loaded_image_protocol");
+            let _ = writeln!(ser, "[ARGUS-LOADER] stage=manifest result=REFUSED code=E_MANIFEST_ABSENT detail=\"no volume to read the manifest from\"");
+            let _ = writeln!(ser, "[ARGUS-LOADER] stage=handoff result=REFUSED reason=security_policy stage=manifest code=E_MANIFEST_ABSENT");
             halt();
         }
     };
@@ -353,7 +381,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     let li = unsafe { &*loaded_image };
     let _ = writeln!(
         ser,
-        "[ARGUS-LOADER] stage=kernel-read event=loaded_image base=0x{:x} size=0x{:x} device_handle=0x{:x}",
+        "[ARGUS-LOADER] stage=volume event=loaded_image base=0x{:x} size=0x{:x} device_handle=0x{:x}",
         li.image_base as usize, li.image_size, li.device_handle as usize
     );
     reserved.add(
@@ -375,21 +403,64 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         &mut ser,
     );
 
-    let (volume, kernel_buf, kernel_len) = match open_kernel_file(bs, li, &mut ser) {
-        Ok(v) => v,
-        Err(e) => {
+    let volume = match find_boot_volume(bs, li, &mut ser) {
+        Some(v) => v,
+        None => {
             let _ = writeln!(
                 ser,
-                "[ARGUS-LOADER] stage=kernel-read event=fail path={} reason={}",
-                KERNEL_PATH, e
+                "[ARGUS-LOADER] stage=manifest result=REFUSED code=E_MANIFEST_ABSENT detail=\"no filesystem on the boot volume; the manifest cannot be read\""
+            );
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=handoff result=REFUSED reason=security_policy stage=manifest code=E_MANIFEST_ABSENT"
             );
             halt();
         }
     };
+
+    // ---- stage: signed manifest -----------------------------------------
+    // Nothing has been read from the volume yet except its root directory.
+    // The kernel is not touched until this returns a manifest whose signature,
+    // key id, loader version and slot are all acceptable.
+    let manifest = match security::enforce_manifest(bs, volume, &mut ser) {
+        Ok(m) => m,
+        Err(r) => refuse(&mut ser, r),
+    };
+
+    // ---- stage: anti-replay floor ---------------------------------------
+    let boot_state = match security::enforce_rollback(bs, volume, &manifest, &mut ser) {
+        Ok(s) => s,
+        Err(r) => refuse(&mut ser, r),
+    };
+
+    // ---- stage: boot config ---------------------------------------------
+    if let Err(r) = security::verify_config(bs, volume, &manifest, &mut ser) {
+        refuse(&mut ser, r);
+    }
+
+    // ---- stage: kernel read ---------------------------------------------
+    let (kernel_buf, kernel_len) =
+        match security::read_file(bs, volume, security::KERNEL_PATH, MAX_KERNEL_BYTES) {
+            Ok(v) => v,
+            Err(reason) => {
+                let _ = writeln!(
+                    ser,
+                    "[ARGUS-LOADER] stage=kernel-read result=REFUSED code=E_KERNEL_UNREADABLE detail=\"cannot read the kernel\" path={} reason={}",
+                    security::KERNEL_PATH, reason
+                );
+                refuse(
+                    &mut ser,
+                    security::Refusal {
+                        stage: "kernel-read",
+                        code: "E_KERNEL_UNREADABLE",
+                    },
+                );
+            }
+        };
     let _ = writeln!(
         ser,
         "[ARGUS-LOADER] stage=kernel-read event=ok path={} bytes={} buffer=0x{:x}",
-        KERNEL_PATH, kernel_len, kernel_buf as usize
+        security::KERNEL_PATH, kernel_len, kernel_buf as usize
     );
     reserved.add(
         kernel_buf as usize,
@@ -397,6 +468,18 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         bootinfo::reservation_kind::KERNEL_FILE_BUFFER,
         &mut ser,
     );
+
+    // SAFETY: `kernel_buf` holds `kernel_len` initialised bytes read from the
+    // file above; building a slice over exactly that range is sound.
+    let file = unsafe { core::slice::from_raw_parts(kernel_buf, kernel_len) };
+
+    // ---- stage: kernel digest -------------------------------------------
+    // The digest inside the signed manifest is what authenticates the kernel.
+    // This runs before ELF parsing on purpose: a byte flipped in the kernel
+    // must be reported as a digest mismatch, not as a confusing ELF error.
+    if let Err(r) = security::verify_kernel(&manifest, file, &mut ser) {
+        refuse(&mut ser, r);
+    }
 
     // ---- stage: ELF validation ------------------------------------------
     // SAFETY: `kernel_buf` holds `kernel_len` initialised bytes read from the
@@ -439,6 +522,12 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     // be checked against the kernel's target range while nothing is written
     // yet. A mis-placed initrd is a load failure, never a silent overwrite.
     let initrd = load_initrd(bs, volume, &image, loader_range, &reserved, &mut ser);
+
+    // The initrd is covered by the same signed manifest as the kernel, so a
+    // swapped initrd is refused rather than handed to the kernel.
+    if let Err(r) = security::verify_initrd(&manifest, initrd.phys, initrd.len, &mut ser) {
+        refuse(&mut ser, r);
+    }
 
     // ---- stage: load segments -------------------------------------------
     for i in 0..image.segment_count {
@@ -492,7 +581,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     bi.loader_reserved_count = reserved.count as u32;
     bi.loader_reserved_capacity = bootinfo::MAX_LOADER_RESERVED as u32;
     bi.loader_reserved = reserved.items;
-    bi.boot_slot = bootinfo::SLOT_A;
+    bi.boot_slot = manifest.slot as u32;
     bi.boot_reason = bootinfo::boot_reason::COLD_BOOT;
     bi.debug_serial = DebugSerial {
         base_port: COM1,
@@ -573,6 +662,11 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         "[ARGUS-LOADER] stage=bootinfo field=debug_serial port=0x{:x} baud={} present={}",
         bi.debug_serial.base_port, bi.debug_serial.baud, bi.debug_serial.present
     );
+
+    // ---- stage: floor and confirmation ----------------------------------
+    // Writes must happen while boot services still exist, and must happen after
+    // every check has passed: a refused boot changes nothing on disk.
+    security::commit_boot_state(bs, volume, &boot_state, &manifest, &mut ser);
 
     // ---- stage: exit boot services --------------------------------------
     let exit_status = exit_boot_services(bs, image_handle, &mut map_key, &mut ser);
@@ -1170,50 +1264,45 @@ fn probe_sfs(bs: &BootServices, handle: Handle) -> Option<*mut SimpleFileSystem>
     }
 }
 
-/// Find the filesystem this loader was booted from and read the kernel off it.
+/// Find the filesystem this loader was booted from.
 ///
-/// Route order, most specific first, and each route is logged with its status
-/// so a failure names the route that failed:
+/// Route order, most specific first, each logged so a failure names the route
+/// that failed:
 ///
 /// 1. `LoadedImage->DeviceHandle` + `OpenProtocol(SimpleFileSystem)` — the
-///    canonical route from the UEFI specification. On OVMF this is the one that
-///    works, and it needs neither enumeration nor device-path resolution.
-/// 2. `LocateDevicePath` on `LoadedImage->FilePath` — kept because some
-///    firmware resolves the volume only this way.
+///    canonical route from the UEFI specification, and the one OVMF takes.
+/// 2. `LocateDevicePath` on `LoadedImage->FilePath` — some firmware resolves the
+///    volume only this way.
 /// 3. Every `SimpleFileSystem` handle in the system — the last resort, and the
 ///    only route that can pick the *wrong* volume, which is why it is last.
 ///
-/// Returns the volume that worked along with the file, so the initrd can be
-/// read from the same volume.
-fn open_kernel_file(
+/// This used to also carry a hand-written block-level FAT reader as a fourth
+/// route, for firmware that exposes no filesystem. That route is gone: slice 2a
+/// must read and verify `\ARGUS\ARGUS.MF` before it loads anything, and a boot
+/// with no filesystem cannot produce a manifest. Failing closed is the only
+/// honest answer; `fat.rs` stays in the tree for the boot manager work.
+fn find_boot_volume(
     bs: &BootServices,
     li: &LoadedImage,
     ser: &mut Serial,
-) -> Result<(*mut SimpleFileSystem, *mut u8, usize), &'static str> {
-    let mut tried = 0u32;
-
-    // --- route 1: the device handle the firmware reported -------------------
-    // This is `OpenProtocol` on `DeviceHandle`, per the specification's own
-    // description of how an image finds the volume it came from.
+) -> Option<*mut SimpleFileSystem> {
+    // --- route 1 -----------------------------------------------------------
     let via_handle = probe_sfs(bs, li.device_handle);
     let _ = writeln!(
         ser,
-        "[ARGUS-LOADER] stage=kernel-read event=volume_probe route=loaded_image_device_handle handle=0x{:x} found={}",
+        "[ARGUS-LOADER] stage=volume event=probe route=loaded_image_device_handle handle=0x{:x} found={}",
         li.device_handle as usize,
         via_handle.is_some() as u8
     );
     if let Some(v) = via_handle {
-        tried += 1;
-        if let Ok((buf, len)) = read_file_from_volume(bs, v, KERNEL_PATH) {
-            return Ok((v, buf, len));
-        }
         let _ = writeln!(
             ser,
-            "[ARGUS-LOADER] stage=kernel-read event=volume_skip route=loaded_image_device_handle reason=file_not_found"
+            "[ARGUS-LOADER] stage=volume event=found route=loaded_image_device_handle"
         );
+        return Some(v);
     }
 
-    // --- route 2: the image's own device path -------------------------------
+    // --- route 2 -----------------------------------------------------------
     if !li.file_path.is_null() {
         let mut dp: *mut c_void = li.file_path;
         let mut dev: Handle = null_mut();
@@ -1227,28 +1316,24 @@ fn open_kernel_file(
         };
         let _ = writeln!(
             ser,
-            "[ARGUS-LOADER] stage=kernel-read event=volume_probe route=locate_device_path status=0x{:x} found={}",
+            "[ARGUS-LOADER] stage=volume event=probe route=locate_device_path status=0x{:x} found={}",
             s,
             found.is_some() as u8
         );
         if let Some(v) = found {
-            tried += 1;
-            if let Ok((buf, len)) = read_file_from_volume(bs, v, KERNEL_PATH) {
-                return Ok((v, buf, len));
-            }
             let _ = writeln!(
                 ser,
-                "[ARGUS-LOADER] stage=kernel-read event=volume_skip route=locate_device_path reason=file_not_found"
+                "[ARGUS-LOADER] stage=volume event=found route=locate_device_path"
             );
+            return Some(v);
         }
     }
 
-    // --- route 3: every SimpleFileSystem handle in the system ---------------
+    // --- route 3 -----------------------------------------------------------
     let mut count = 0usize;
     let mut buf: *mut Handle = null_mut();
     // SAFETY: `locate_handle_buffer` allocates the handle array with pool
-    // memory and reports its length in `count`; we free it below with the
-    // matching `free_pool`, as the specification requires.
+    // memory and reports its length in `count`; we free it below.
     let s = unsafe {
         (bs.locate_handle_buffer)(
             EFI_LOCATE_BY_PROTOCOL,
@@ -1260,7 +1345,7 @@ fn open_kernel_file(
     };
     let _ = writeln!(
         ser,
-        "[ARGUS-LOADER] stage=kernel-read event=volume_probe route=locate_handle_buffer status=0x{:x} handles={}",
+        "[ARGUS-LOADER] stage=volume event=probe route=locate_handle_buffer status=0x{:x} handles={}",
         s, count
     );
     if !is_error(s) && !buf.is_null() {
@@ -1269,17 +1354,14 @@ fn open_kernel_file(
             // index below `count` is a valid, initialised `Handle`.
             let h = unsafe { *buf.add(i) };
             if let Some(v) = probe_sfs(bs, h) {
-                tried += 1;
-                if let Ok((fbuf, len)) = read_file_from_volume(bs, v, KERNEL_PATH) {
-                    // SAFETY: `buf` came from `locate_handle_buffer`.
-                    unsafe { (bs.free_pool)(buf as *mut u8) };
-                    return Ok((v, fbuf, len));
-                }
+                // SAFETY: `buf` came from `locate_handle_buffer`.
+                unsafe { (bs.free_pool)(buf as *mut u8) };
                 let _ = writeln!(
                     ser,
-                    "[ARGUS-LOADER] stage=kernel-read event=volume_skip index={} reason=file_not_found",
+                    "[ARGUS-LOADER] stage=volume event=found route=locate_handle_buffer index={}",
                     i
                 );
+                return Some(v);
             }
         }
         // SAFETY: `buf` was allocated by `locate_handle_buffer` from pool
@@ -1287,156 +1369,6 @@ fn open_kernel_file(
         unsafe { (bs.free_pool)(buf as *mut u8) };
     }
 
-    let _ = writeln!(
-        ser,
-        "[ARGUS-LOADER] stage=kernel-read event=no_volume routes_tried={}",
-        tried
-    );
-
-    // --- fallback: read the FAT ourselves ----------------------------------
-    // Reached only when the firmware exposes no usable filesystem driver on
-    // this volume. This path does not depend on any firmware filesystem
-    // support at all, but it cannot hand back a protocol pointer, so it
-    // returns a null volume and the initrd is skipped.
-    let mut block_vols: [Option<fat::Volume>; 8] = [None; 8];
-    let n = fat::find_volumes(bs, &mut block_vols);
-    let _ = writeln!(
-        ser,
-        "[ARGUS-LOADER] stage=kernel-read event=block_probe fat16_volumes={}",
-        n
-    );
-    for i in 0..n {
-        let Some(vol) = block_vols[i] else { continue };
-        match fat::read_root_file(bs, &vol, &KERNEL_NAME_83) {
-            Ok((fbuf, len)) => {
-                let _ = writeln!(
-                    ser,
-                    "[ARGUS-LOADER] stage=kernel-read event=block_read_ok volume={} bytes={}",
-                    i, len
-                );
-                return Ok((null_mut(), fbuf, len));
-            }
-            Err(e) => {
-                let _ = writeln!(
-                    ser,
-                    "[ARGUS-LOADER] stage=kernel-read event=block_skip volume={} reason={}",
-                    i,
-                    e.code()
-                );
-            }
-        }
-    }
-
-    // Every route was tried and none produced the file. Name that, rather
-    // than blaming a missing filesystem driver: on OVMF the driver is present
-    // and this message used to send readers after the wrong bug.
-    Err("kernel_file_not_found_on_any_route")
-}
-
-/// Open `path` on one volume and read the whole file into pool memory.
-fn read_file_from_volume(
-    bs: &BootServices,
-    sfs: *mut SimpleFileSystem,
-    path: &str,
-) -> Result<(*mut u8, usize), &'static str> {
-    // --- volume root ---
-    let mut root: *mut File = null_mut();
-    // SAFETY: `sfs` is a protocol pointer the firmware just returned;
-    // `open_volume` writes the root handle into `root`.
-    let s = unsafe { ((*sfs).open_volume)(sfs, &mut root as *mut *mut File) };
-    if is_error(s) || root.is_null() {
-        return Err("open_volume_failed");
-    }
-
-    // --- open the file ---
-    let mut wide = [0u16; 128];
-    let mut n = 0usize;
-    for unit in path.encode_utf16() {
-        if n + 1 >= wide.len() {
-            return Err("path_too_long");
-        }
-        wide[n] = unit;
-        n += 1;
-    }
-    wide[n] = 0;
-
-    let mut file: *mut File = null_mut();
-    // SAFETY: `root` is a live EFI_FILE_PROTOCOL, `wide` is a NUL-terminated
-    // UCS-2 path on the stack, and mode 0 with attributes 0 is the documented
-    // read-only open. `open` writes the new protocol pointer into `file`.
-    let s = unsafe {
-        ((*root).open)(
-            root,
-            &mut file as *mut *mut File,
-            wide.as_ptr(),
-            EFI_FILE_MODE_READ,
-            0,
-        )
-    };
-    if is_error(s) || file.is_null() {
-        return Err("file_not_found");
-    }
-
-    // --- how big is it? ---
-    let mut info_size: usize = 0;
-    // SAFETY: the documented two-call idiom: a zero-sized buffer returns
-    // EFI_BUFFER_TOO_SMALL and the required size in `info_size`.
-    let s = unsafe { ((*file).get_info)(file, &FILE_INFO_GUID, &mut info_size, null_mut()) };
-    if s != EFI_BUFFER_TOO_SMALL && is_error(s) {
-        return Err("get_info_failed");
-    }
-    if info_size < 16 || info_size > 4096 {
-        return Err("get_info_size_implausible");
-    }
-
-    let mut info_buf: *mut u8 = null_mut();
-    // SAFETY: allocating `info_size` bytes for the firmware to fill.
-    let s = unsafe {
-        (bs.allocate_pool)(efi::EFI_LOADER_DATA, info_size, &mut info_buf as *mut *mut u8)
-    };
-    if is_error(s) || info_buf.is_null() {
-        return Err("allocate_info_buffer_failed");
-    }
-    // SAFETY: `info_buf` has `info_size` writable bytes; the firmware writes
-    // at most that many.
-    let s = unsafe { ((*file).get_info)(file, &FILE_INFO_GUID, &mut info_size, info_buf) };
-    if is_error(s) {
-        return Err("get_info_failed");
-    }
-    // EFI_FILE_INFO.file_size is at offset 8 (Size: u64, FileSize: u64, ...).
-    // SAFETY: `info_size` is at least 16 as checked above, so bytes 8..16 are
-    // inside the buffer the firmware just filled.
-    let file_size = unsafe { core::ptr::read_unaligned((info_buf as *const u64).add(1)) };
-    if file_size == 0 || file_size > 16 * 1024 * 1024 {
-        return Err("file_size_implausible");
-    }
-
-    // --- read it ---
-    let mut buf: *mut u8 = null_mut();
-    // SAFETY: allocating `file_size` bytes for the file contents.
-    let s = unsafe {
-        (bs.allocate_pool)(
-            efi::EFI_LOADER_DATA,
-            file_size as usize,
-            &mut buf as *mut *mut u8,
-        )
-    };
-    if is_error(s) || buf.is_null() {
-        return Err("allocate_file_buffer_failed");
-    }
-
-    let mut to_read = file_size as usize;
-    // SAFETY: `buf` has `file_size` writable bytes and `to_read` never exceeds
-    // that. The firmware writes at most `to_read` bytes and shrinks it.
-    let s = unsafe { ((*file).read)(file, &mut to_read as *mut usize, buf) };
-    if is_error(s) {
-        return Err("read_failed");
-    }
-    // SAFETY: `file` is a live protocol pointer we opened above.
-    unsafe { ((*file).close)(file) };
-
-    if to_read == 0 {
-        return Err("read_zero_bytes");
-    }
-    Ok((buf, to_read))
+    let _ = writeln!(ser, "[ARGUS-LOADER] stage=volume event=absent routes_tried=3");
+    None
 }

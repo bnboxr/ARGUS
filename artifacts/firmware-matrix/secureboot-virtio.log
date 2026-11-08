@@ -1,4 +1,4 @@
 [2J[01;01H[=3h[2J[01;01H[2J[01;01H[=3h[2J[01;01H[2J[01;01H[=3h[2J[01;01HBdsDxe: loading Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0)
 BdsDxe: failed to load Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0): Access Denied
 
->>Start PXE over IPv4.qemu-system-x86_64: terminating on signal 15 from pid 16513 (timeout)
+>>Start PXE over IPv4.qemu-system-x86_64: terminating on signal 15 from pid 19762 (timeout)

@@ -1,11 +1,11 @@
 [2J[01;01H[=3h[2J[01;01H[2J[01;01H[=3h[2J[01;01H[2J[01;01H[=3h[2J[01;01HBdsDxe: loading Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0)
 BdsDxe: starting Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0)
 [ARGUS-LOADER] stage=serial event=init port=0x3f8 baud=115200 uart_present=1
-[ARGUS-LOADER] stage=banner event=start name=ARGUS loader=uefi-x86_64 version=0.2.0 abi_version=1
+[ARGUS-LOADER] stage=banner event=start name=ARGUS loader=uefi-x86_64 version=0.3.0 abi_version=1
 [ARGUS-LOADER] stage=banner event=system_table revision=0x20046 config_entries=11 boot_services=0x7eaff00
 [ARGUS-LOADER] stage=banner event=watchdog_disabled status=0x0
-[ARGUS-LOADER] stage=reserve index=0 kind=memmap_buffer start=0x616f018 len=0x10000 end=0x617f018
-[ARGUS-LOADER] stage=memmap event=received entries=127 bytes=6096 descriptor_size=48 descriptor_version=0x1 map_key=0xaec
+[ARGUS-LOADER] stage=reserve index=0 kind=memmap_buffer start=0x6164018 len=0x10000 end=0x6174018
+[ARGUS-LOADER] stage=memmap event=received entries=127 bytes=6096 descriptor_size=48 descriptor_version=0x1 map_key=0xaee
 [ARGUS-LOADER] stage=memmap entry=0 type=3 name=BootServicesCode start=0x0 pages=1 end=0x1000 attr=0xf
 [ARGUS-LOADER] stage=memmap entry=1 type=7 name=ConventionalMemory start=0x1000 pages=159 end=0xa0000 attr=0xf
 [ARGUS-LOADER] stage=memmap entry=2 type=7 name=ConventionalMemory start=0x100000 pages=1792 end=0x800000 attr=0xf
@@ -17,10 +17,10 @@ BdsDxe: starting Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0)
 [ARGUS-LOADER] stage=memmap entry=8 type=4 name=BootServicesData start=0x900000 pages=3712 end=0x1780000 attr=0xf
 [ARGUS-LOADER] stage=memmap entry=9 type=7 name=ConventionalMemory start=0x1780000 pages=10229 end=0x3f75000 attr=0xf
 [ARGUS-LOADER] stage=memmap entry=10 type=4 name=BootServicesData start=0x3f75000 pages=32 end=0x3f95000 attr=0xf
-[ARGUS-LOADER] stage=memmap entry=11 type=7 name=ConventionalMemory start=0x3f95000 pages=8666 end=0x616f000 attr=0xf
-[ARGUS-LOADER] stage=memmap entry=12 type=2 name=LoaderData start=0x616f000 pages=17 end=0x6180000 attr=0xf
-[ARGUS-LOADER] stage=memmap entry=13 type=1 name=LoaderCode start=0x6180000 pages=16 end=0x6190000 attr=0xf
-[ARGUS-LOADER] stage=memmap entry=14 type=7 name=ConventionalMemory start=0x6190000 pages=9 end=0x6199000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=11 type=7 name=ConventionalMemory start=0x3f95000 pages=8655 end=0x6164000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=12 type=2 name=LoaderData start=0x6164000 pages=17 end=0x6175000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=13 type=1 name=LoaderCode start=0x6175000 pages=21 end=0x618a000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=14 type=7 name=ConventionalMemory start=0x618a000 pages=15 end=0x6199000 attr=0xf
 [ARGUS-LOADER] stage=memmap entry=15 type=4 name=BootServicesData start=0x6199000 pages=2037 end=0x698e000 attr=0xf
 [ARGUS-LOADER] stage=memmap entry=16 type=3 name=BootServicesCode start=0x698e000 pages=180 end=0x6a42000 attr=0xf
 [ARGUS-LOADER] stage=memmap entry=17 type=4 name=BootServicesData start=0x6a42000 pages=48 end=0x6a72000 attr=0xf
@@ -136,15 +136,27 @@ BdsDxe: starting Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0)
 [ARGUS-LOADER] stage=memmap event=summary entries=127 copied=127 usable_bytes=0x79c8000 clamped=0
 [ARGUS-LOADER] stage=acpi event=found pass=1 phys=0x7b7e014 revision=2 length=36 checksum_sum=0x00 valid=1
 [ARGUS-LOADER] stage=gop event=present mode=0 max_mode=30 base=0x80000000 size=0x3e8000 resolution=1280x800 stride=1280 format=BGRx8
-[ARGUS-LOADER] stage=kernel-read event=loaded_image base=0x6180000 size=0x10000 device_handle=0x684f398
-[ARGUS-LOADER] stage=reserve index=1 kind=loader_image start=0x6180000 len=0x10000 end=0x6190000
-[ARGUS-LOADER] stage=reserve index=2 kind=bootinfo start=0x618c000 len=0x1b80 end=0x618db80
-[ARGUS-LOADER] stage=reserve index=3 kind=jump_stack start=0x618a000 len=0x2000 end=0x618c000
-[ARGUS-LOADER] stage=kernel-read event=volume_probe route=loaded_image_device_handle handle=0x684f398 found=1
-[ARGUS-LOADER] stage=kernel-read event=ok path=\ARGUSKRN.ELF bytes=812920 buffer=0x60a8018
-[ARGUS-LOADER] stage=reserve index=4 kind=kernel_file_buffer start=0x60a8018 len=0xc6778 end=0x616e790
+[ARGUS-LOADER] stage=volume event=loaded_image base=0x6175000 size=0x15000 device_handle=0x684f398
+[ARGUS-LOADER] stage=reserve index=1 kind=loader_image start=0x6175000 len=0x15000 end=0x618a000
+[ARGUS-LOADER] stage=reserve index=2 kind=bootinfo start=0x6186000 len=0x1b80 end=0x6187b80
+[ARGUS-LOADER] stage=reserve index=3 kind=jump_stack start=0x6184000 len=0x2000 end=0x6186000
+[ARGUS-LOADER] stage=volume event=probe route=loaded_image_device_handle handle=0x684f398 found=1
+[ARGUS-LOADER] stage=volume event=found route=loaded_image_device_handle
+[ARGUS-LOADER] stage=manifest event=parsed bytes=473 fmt_version=1 manifest_version=1 slot=A slot_generation=1 security_version=2 min_loader_version=3 issued_counter=1
+[ARGUS-LOADER] stage=manifest event=digests payload_digest=6c973ea3e6057cc34a38b2dfb8cb7a2cebb31942396d32e30fe13f2fc89e06ac kernel_digest=221c496877f7c98ff92562adbc8b326bdb96da57ced567253a78b025af830b27 config_digest=dd5ec7364884d7ec46309286367485cdee8dfd65bbb9d2063cca25b6fbbac0b6 initrd_digest=03b82b9b9ec6461a609222d40a187645814826b9f24f34a7d7595c9d0cdec8d0
+[ARGUS-LOADER] stage=manifest event=key expected_id=a6f3c213903d4febbf9ef2d132a05659 constant_id=a6f3c213903d4febbf9ef2d132a05659 constant_matches=1
+[ARGUS-LOADER] stage=manifest event=signature result=VALID alg=rsa2048-pkcs1v15-sha256 key_id=a6f3c213903d4febbf9ef2d132a05659 sig_len=256
+[ARGUS-LOADER] stage=manifest event=verified result=ACCEPT slot=A security_version=2 manifest_version=1
+[ARGUS-LOADER] stage=floor event=read result=OK floor=1 seq=1 path=\ARGUS\FLOOR
+[ARGUS-LOADER] stage=confirm event=absent
+[ARGUS-LOADER] stage=floor event=enforced floor=1 pending=0 effective=1 manifest_security_version=2
+[ARGUS-LOADER] stage=config result=MATCH path=\ARGUS\BOOT.CFG sha256=dd5ec7364884d7ec46309286367485cdee8dfd65bbb9d2063cca25b6fbbac0b6 bytes=120
+[ARGUS-LOADER] stage=kernel-read event=ok path=\ARGUSKRN.ELF bytes=812920 buffer=0x609d018
+[ARGUS-LOADER] stage=reserve index=4 kind=kernel_file_buffer start=0x609d018 len=0xc6778 end=0x6163790
+[ARGUS-LOADER] stage=kernel-digest result=MATCH sha256=221c496877f7c98ff92562adbc8b326bdb96da57ced567253a78b025af830b27 bytes=812920 source=signed_manifest
 [ARGUS-LOADER] stage=elf-validate result=ACCEPT entry=0x1000000 segments=4 phnum=6 image_bytes=13753
-[ARGUS-LOADER] stage=initrd event=loaded path=\INITRD.BIN phys=0x6196000 len=0x1000 pages=1
+[ARGUS-LOADER] stage=initrd event=loaded path=\INITRD.BIN phys=0x618f000 len=0x1000 pages=1
+[ARGUS-LOADER] stage=initrd-digest result=MATCH sha256=03b82b9b9ec6461a609222d40a187645814826b9f24f34a7d7595c9d0cdec8d0 bytes=4096
 [ARGUS-LOADER] stage=elf-load segment=0 paddr=0x1000000 vaddr=0x1000000 file_offset=0x1000 filesz=0x240f memsz=0x240f flags=0x5
 [ARGUS-LOADER] stage=elf-load segment=1 paddr=0x1002410 vaddr=0x1002410 file_offset=0x3410 filesz=0x10e2 memsz=0x10e2 flags=0x4
 [ARGUS-LOADER] stage=elf-load segment=2 paddr=0x10034f8 vaddr=0x10034f8 file_offset=0x44f8 filesz=0x80 memsz=0x80 flags=0x6
@@ -153,30 +165,32 @@ BdsDxe: starting Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0)
 [ARGUS-LOADER] stage=elf-load segment=1 result=COPIED dst=0x1002410 from_file=0x3410 zero_filled=0x0
 [ARGUS-LOADER] stage=elf-load segment=2 result=COPIED dst=0x10034f8 from_file=0x44f8 zero_filled=0x0
 [ARGUS-LOADER] stage=elf-load segment=3 result=COPIED dst=0x1003580 from_file=0x4580 zero_filled=0x4008
-[ARGUS-LOADER] stage=bootinfo field=memory_map count=127 capacity=192 desc_size=48 map_key=0xaec
+[ARGUS-LOADER] stage=bootinfo field=memory_map count=127 capacity=192 desc_size=48 map_key=0xaee
 [ARGUS-LOADER] stage=bootinfo field=acpi present=1 rsdp=0x7b7e014 revision=2 checksum=0x00
 [ARGUS-LOADER] stage=bootinfo field=framebuffer phys=0x80000000 width=1280 height=800 stride=1280 format=BGRx8 size=0x3e8000
-[ARGUS-LOADER] stage=bootinfo field=initrd phys=0x6196000 len=0x1000
+[ARGUS-LOADER] stage=bootinfo field=initrd phys=0x618f000 len=0x1000
 [ARGUS-LOADER] stage=bootinfo field=kernel_phys start=0x1000000 len=0x75d0 phnum=6
 [ARGUS-LOADER] stage=bootinfo field=loader_reserved count=5
 [ARGUS-LOADER] stage=bootinfo field=boot_slot value=0 boot_reason=cold_boot
 [ARGUS-LOADER] stage=bootinfo field=debug_serial port=0x3f8 baud=115200 present=1
-[ARGUS-LOADER] stage=exit-boot-services event=attempt n=1 map_key=0xaec
-[ARGUS-LOADER] stage=exit-boot-services event=attempt n=2 map_key=0xb0e
-[ARGUS-LOADER] stage=exit-boot-services result=EFI_SUCCESS status=0x0 map_key=0xb0e
-[ARGUS-LOADER] stage=bootinfo event=sealed address=0x618c000 magic=0x4152475553000001 abi_version=1 abi_size=7040 checksum=0x33fbacb1 flags=0x1c
-[ARGUS-LOADER] stage=handoff event=jump entry=0x1000000 bootinfo=0x618c000 abi=sysv-x86_64 arg0=rdi checksum=0x33fbacb1
+[ARGUS-LOADER] stage=floor event=stable floor=1 pending=0 detail="nothing to raise"
+[ARGUS-LOADER] stage=confirm event=pending seq=1 slot=A security_version=2 payload_digest=6c973ea3e6057cc34a38b2dfb8cb7a2cebb31942396d32e30fe13f2fc89e06ac path=\ARGUS\CONFIRM
+[ARGUS-LOADER] stage=exit-boot-services event=attempt n=1 map_key=0xaee
+[ARGUS-LOADER] stage=exit-boot-services event=attempt n=2 map_key=0xb42
+[ARGUS-LOADER] stage=exit-boot-services result=EFI_SUCCESS status=0x0 map_key=0xb42
+[ARGUS-LOADER] stage=bootinfo event=sealed address=0x6186000 magic=0x4152475553000001 abi_version=1 abi_size=7040 checksum=0xcba08bd4 flags=0x1c
+[ARGUS-LOADER] stage=handoff event=jump entry=0x1000000 bootinfo=0x6186000 abi=sysv-x86_64 arg0=rdi checksum=0xcba08bd4
 [ARGUS-KERNEL] stage=entry event=start name=ARGUS kernel=x86_64 version=0.2.0 abi_version=1 uart_present=1
 [ARGUS-KERNEL] stage=entry event=running rip_is_kernel_text=1 identity_mapped=1
 [ARGUS-KERNEL] stage=entry event=banner "ARGUS kernel is alive"
-[ARGUS-KERNEL] stage=bootinfo event=received address=0x618c000 magic=0x4152475553000001 abi_version=1 abi_size=7040
-[ARGUS-KERNEL] stage=bootinfo event=checksum_ok carried=0x33fbacb1 computed=0x33fbacb1 covered_bytes=7040
+[ARGUS-KERNEL] stage=bootinfo event=received address=0x6186000 magic=0x4152475553000001 abi_version=1 abi_size=7040
+[ARGUS-KERNEL] stage=bootinfo event=checksum_ok carried=0xcba08bd4 computed=0xcba08bd4 covered_bytes=7040
 [ARGUS-KERNEL] stage=bootinfo field=magic value=0x4152475553000001
 [ARGUS-KERNEL] stage=bootinfo field=abi_version value=1
 [ARGUS-KERNEL] stage=bootinfo field=abi_size value=7040
 [ARGUS-KERNEL] stage=bootinfo field=flags value=0x1c memmap_clamped=0 reserved_clamped=0 framebuffer=1 acpi=1 initrd=1 test_corrupted=0
-[ARGUS-KERNEL] stage=bootinfo field=checksum value=0x33fbacb1 verified=1
-[ARGUS-KERNEL] stage=bootinfo field=boot_tsc value=0x1ef09133c
+[ARGUS-KERNEL] stage=bootinfo field=checksum value=0xcba08bd4 verified=1
+[ARGUS-KERNEL] stage=bootinfo field=boot_tsc value=0x1ee48acb8
 [ARGUS-KERNEL] stage=bootinfo field=kernel_entry value=0x1000000
 [ARGUS-KERNEL] stage=bootinfo field=kernel_image_bytes value=0x35b9
 [ARGUS-KERNEL] stage=bootinfo field=segment_count value=4 kernel_phnum=6
@@ -185,7 +199,7 @@ BdsDxe: starting Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0)
 [ARGUS-KERNEL] stage=bootinfo field=segments[1] vaddr=0x1002410 paddr=0x1002410 filesz=0x10e2 memsz=0x10e2 flags=0x4
 [ARGUS-KERNEL] stage=bootinfo field=segments[2] vaddr=0x10034f8 paddr=0x10034f8 filesz=0x80 memsz=0x80 flags=0x6
 [ARGUS-KERNEL] stage=bootinfo field=segments[3] vaddr=0x1003580 paddr=0x1003580 filesz=0x48 memsz=0x4050 flags=0x6
-[ARGUS-KERNEL] stage=bootinfo field=memory_map_meta count=127 capacity=192 desc_size=48 desc_version=0x1 map_key=0xb0e
+[ARGUS-KERNEL] stage=bootinfo field=memory_map_meta count=127 capacity=192 desc_size=48 desc_version=0x1 map_key=0xb42
 [ARGUS-KERNEL] stage=bootinfo field=memory_regions[0] type=3 name=BootServicesCode start=0x0 len=0x1000 end=0x1000 uefi_attribs=0xf
 [ARGUS-KERNEL] stage=bootinfo field=memory_regions[1] type=7 name=ConventionalMemory start=0x1000 len=0x9f000 end=0xa0000 uefi_attribs=0xf
 [ARGUS-KERNEL] stage=bootinfo field=memory_regions[2] type=7 name=ConventionalMemory start=0x100000 len=0x700000 end=0x800000 uefi_attribs=0xf
@@ -197,10 +211,10 @@ BdsDxe: starting Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0)
 [ARGUS-KERNEL] stage=bootinfo field=memory_regions[8] type=4 name=BootServicesData start=0x900000 len=0xe80000 end=0x1780000 uefi_attribs=0xf
 [ARGUS-KERNEL] stage=bootinfo field=memory_regions[9] type=7 name=ConventionalMemory start=0x1780000 len=0x27f5000 end=0x3f75000 uefi_attribs=0xf
 [ARGUS-KERNEL] stage=bootinfo field=memory_regions[10] type=4 name=BootServicesData start=0x3f75000 len=0x20000 end=0x3f95000 uefi_attribs=0xf
-[ARGUS-KERNEL] stage=bootinfo field=memory_regions[11] type=7 name=ConventionalMemory start=0x3f95000 len=0x21da000 end=0x616f000 uefi_attribs=0xf
-[ARGUS-KERNEL] stage=bootinfo field=memory_regions[12] type=2 name=LoaderData start=0x616f000 len=0x11000 end=0x6180000 uefi_attribs=0xf
-[ARGUS-KERNEL] stage=bootinfo field=memory_regions[13] type=1 name=LoaderCode start=0x6180000 len=0x10000 end=0x6190000 uefi_attribs=0xf
-[ARGUS-KERNEL] stage=bootinfo field=memory_regions[14] type=7 name=ConventionalMemory start=0x6190000 len=0x9000 end=0x6199000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[11] type=7 name=ConventionalMemory start=0x3f95000 len=0x21cf000 end=0x6164000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[12] type=2 name=LoaderData start=0x6164000 len=0x11000 end=0x6175000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[13] type=1 name=LoaderCode start=0x6175000 len=0x15000 end=0x618a000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[14] type=7 name=ConventionalMemory start=0x618a000 len=0xf000 end=0x6199000 uefi_attribs=0xf
 [ARGUS-KERNEL] stage=bootinfo field=memory_regions[15] type=4 name=BootServicesData start=0x6199000 len=0x7f5000 end=0x698e000 uefi_attribs=0xf
 [ARGUS-KERNEL] stage=bootinfo field=memory_regions[16] type=3 name=BootServicesCode start=0x698e000 len=0xb4000 end=0x6a42000 uefi_attribs=0xf
 [ARGUS-KERNEL] stage=bootinfo field=memory_regions[17] type=4 name=BootServicesData start=0x6a42000 len=0x30000 end=0x6a72000 uefi_attribs=0xf
@@ -317,13 +331,13 @@ BdsDxe: starting Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0)
 [ARGUS-KERNEL] stage=bootinfo field=acpi present=1 rsdp_phys=0x7b7e014 rsdp_checksum=0x00 revision=2
 [ARGUS-KERNEL] stage=bootinfo event=acpi_readback signature="RSD PTR" match=1
 [ARGUS-KERNEL] stage=bootinfo field=framebuffer present=1 phys=0x80000000 width=1280 height=800 stride=1280 pixel_format=1 name=BGRx8 size_bytes=0x3e8000
-[ARGUS-KERNEL] stage=bootinfo field=initrd phys=0x6196000 len=0x1000
+[ARGUS-KERNEL] stage=bootinfo field=initrd phys=0x618f000 len=0x1000
 [ARGUS-KERNEL] stage=bootinfo event=initrd_readback magic_match=1 expected=ARGUSIRD
-[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[0] kind=4 name=memmap_buffer start=0x616f018 len=0x10000 end=0x617f018
-[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[1] kind=1 name=loader_image start=0x6180000 len=0x10000 end=0x6190000
-[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[2] kind=2 name=bootinfo start=0x618c000 len=0x1b80 end=0x618db80
-[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[3] kind=3 name=jump_stack start=0x618a000 len=0x2000 end=0x618c000
-[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[4] kind=5 name=kernel_file_buffer start=0x60a8018 len=0xc6778 end=0x616e790
+[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[0] kind=4 name=memmap_buffer start=0x6164018 len=0x10000 end=0x6174018
+[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[1] kind=1 name=loader_image start=0x6175000 len=0x15000 end=0x618a000
+[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[2] kind=2 name=bootinfo start=0x6186000 len=0x1b80 end=0x6187b80
+[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[3] kind=3 name=jump_stack start=0x6184000 len=0x2000 end=0x6186000
+[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[4] kind=5 name=kernel_file_buffer start=0x609d018 len=0xc6778 end=0x6163790
 [ARGUS-KERNEL] stage=bootinfo field=loader_reserved_count value=5 capacity=16
 [ARGUS-KERNEL] stage=bootinfo field=boot_slot value=0 boot_reason=1 boot_reason_name=cold_boot
 [ARGUS-KERNEL] stage=bootinfo field=debug_serial base_port=0x3f8 baud=115200 present=1
@@ -331,4 +345,4 @@ BdsDxe: starting Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0)
 [ARGUS-KERNEL] stage=bootinfo event=placement _start=0x1000000 first_segment_paddr=0x1000000 kernel_phys_start=0x1000000 match=1
 [ARGUS-KERNEL] stage=halt event=ready state=loop_hlt
 [ARGUS-KERNEL] stage=halt event=boot_proven kernel_banner=1 bootinfo_dumped=1 bootinfo_checksum=ok abi_version=1
-qemu-system-x86_64: terminating on signal 15 from pid 13840 (timeout)
+qemu-system-x86_64: terminating on signal 15 from pid 24283 (timeout)

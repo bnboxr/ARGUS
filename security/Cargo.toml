@@ -1,0 +1,14 @@
+[package]
+name = "argus-security"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "ARGUS boot manifest (ARGUS.MF), RSA-2048 PKCS#1 v1.5/SHA-256 verification, SHA-256, CRC32, anti-replay floor records"
+
+[lib]
+name = "argus_security"
+path = "src/lib.rs"
+
+[dependencies]
+# Deliberately empty — see ../deps.md. The crypto here is written in this
+# repository precisely so the boot path links no third-party code.

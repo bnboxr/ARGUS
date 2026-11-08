@@ -6,6 +6,7 @@ version = 4
 name = "argus-bootloader"
 version = "0.1.0"
 dependencies = [
+ "argus-security",
  "argus-shared",
 ]
 
@@ -17,5 +18,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "argus-security"
+version = "0.1.0"
+
+[[package]]
 name = "argus-shared"
 version = "0.1.0"
+
+[[package]]
+name = "argus-sign-manifest"
+version = "0.1.0"
+dependencies = [
+ "argus-security",
+]

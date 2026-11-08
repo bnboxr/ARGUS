@@ -231,9 +231,9 @@ pub struct File {
     pub close: unsafe extern "efiapi" fn(*mut File) -> Status,
     pub delete: usize,
     pub read: unsafe extern "efiapi" fn(*mut File, *mut usize, *mut u8) -> Status,
-    pub write: usize,
+    pub write: unsafe extern "efiapi" fn(*mut File, *mut usize, *mut u8) -> Status,
     pub get_position: usize,
-    pub set_position: usize,
+    pub set_position: unsafe extern "efiapi" fn(*mut File, u64) -> Status,
     pub get_info: unsafe extern "efiapi" fn(
         *mut File,
         *const Guid,
@@ -264,6 +264,12 @@ pub const DEVICE_PATH_PROTOCOL: Guid = Guid::new(
 
 /// `EFI_FILE_MODE_READ`.
 pub const EFI_FILE_MODE_READ: u64 = 0x0000_0000_0000_0001;
+/// `EFI_FILE_MODE_WRITE` — required to write the anti-replay floor.
+pub const EFI_FILE_MODE_WRITE: u64 = 0x0000_0000_0000_0002;
+/// `EFI_FILE_MODE_CREATE` — create the file if it is not there yet.
+pub const EFI_FILE_MODE_CREATE: u64 = 0x8000_0000_0000_0000;
+/// `EFI_FILE_ATTRIBUTE_ARCHIVE`, used only when creating.
+pub const EFI_FILE_ATTRIBUTE_ARCHIVE: u64 = 0x0000_0000_0000_0020;
 
 /// `EFI_LOCATE_SEARCH_TYPE::ByProtocol`.
 pub const EFI_LOCATE_BY_PROTOCOL: u32 = 2;

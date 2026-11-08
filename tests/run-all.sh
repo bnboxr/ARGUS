@@ -37,7 +37,14 @@ step "protocol GUIDs" python3 "$ROOT/tests/protocol-guid.py" "$ROOT/bootloader/s
 # 1. the positive boot. Everything else is meaningless if this fails.
 step "boot (positive)" "$ROOT/run.sh"
 
-# 2. negative tests.
+# 2. the crypto known-answer tests: the verifier has to be proven before the
+#    tests that rely on it mean anything.
+step "crypto known-answer tests" "$ROOT/tests/crypto-kat.sh"
+
+# 3. the signed-manifest security chain, one attack per case.
+step "manifest security chain (negative)" "$ROOT/tests/manifest-tests.sh"
+
+# 4. negative tests.
 step "corrupted ELF kernels" "$ROOT/tests/negative-tests.sh"
 step "broken kernel exit status" "$ROOT/tests/break-kernel.sh"
 step "BootInfo checksum refusal" "$ROOT/tests/bootinfo-checksum.sh"

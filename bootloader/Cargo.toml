@@ -11,5 +11,6 @@ path = "src/main.rs"
 
 [dependencies]
 argus-shared = { path = "../shared" }
+argus-security = { path = "../security" }
 # No third-party crates. The UEFI bindings are hand-written in src/efi.rs.
 # See ../deps.md.

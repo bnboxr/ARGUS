@@ -8,7 +8,7 @@
 [2J[01;01H[=3h[2J[01;01H[2J[01;01H[=3h[2J[01;01H[2J[01;01H[=3h[2J[01;01HBdsDxe: loading Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0)
 BdsDxe: failed to load Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0): Access Denied
 
->>Start PXE over IPv4.qemu-system-x86_64: terminating on signal 15 from pid 16513 (timeout)
+>>Start PXE over IPv4.qemu-system-x86_64: terminating on signal 15 from pid 19762 (timeout)
 [1;31m[run] MISSING:[0m [ARGUS-LOADER] stage=banner event=start
 [1;31m[run] MISSING:[0m [ARGUS-LOADER] stage=memmap event=summary
 [1;31m[run] MISSING:[0m [ARGUS-LOADER] stage=acpi event=
@@ -45,7 +45,7 @@ BdsDxe: failed to load Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0
       qemu_to_kernel_halt_ms=
       drive_interface=virtio
       firmware=/usr/share/OVMF/OVMF_CODE_4M.ms.fd
-      run_utc=2026-11-08T21:22:30Z
+      run_utc=2026-11-08T21:25:09Z
 
 [1;31m[run] FAIL:[0m the kernel banner, a BootInfo field, or a loader stage is missing from the serial log.
       The boot is NOT proven. Full log: /home/team/shared/argus/artifacts/firmware-matrix/secureboot-virtio.log

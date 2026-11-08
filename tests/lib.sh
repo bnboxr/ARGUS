@@ -29,6 +29,14 @@ new_image() {
     cp "$ROOT/dist/argus-disk.img" "$dir/dist/argus-disk.img"
     # run.sh reports build time from this file; copy it so the log is complete.
     [ -f "$ROOT/dist/build-timing.txt" ] && cp "$ROOT/dist/build-timing.txt" "$dir/dist/"
+    # Reset the boot-time state a previous ./run.sh left behind. Every case must
+    # start from the image *as built*: \ARGUS\CONFIRM absent (no boot confirmed
+    # yet) and \ARGUS\FLOOR at its seeded value. Without this, a case inherits a
+    # floor of 2 from whatever was booted last and refuses for the wrong reason —
+    # which is exactly the bug this line fixes, observed once.
+    MTOOLS_SKIP_CHECK=1 mdel -i "$dir/dist/argus-disk.img@@1M" ::/ARGUS/CONFIRM 2>/dev/null || true
+    cp "$ROOT/dist/esp/ARGUS/FLOOR" "$dir/dist/floor.seed"
+    MTOOLS_SKIP_CHECK=1 mcopy -o -i "$dir/dist/argus-disk.img@@1M" "$dir/dist/floor.seed" ::/ARGUS/FLOOR
     printf '%s\n' "$dir/dist/argus-disk.img"
 }
 
@@ -42,6 +50,19 @@ put_kernel() {
 remove_kernel() {
     local img="$1"
     MTOOLS_SKIP_CHECK=1 mdel -i "$img@@1M" ::/ARGUSKRN.ELF
+}
+
+# put_file <image> <file> <::/dest> — drop a file into the ESP inside the image.
+# The @@1M offset is the partition start; mtools reads it as "skip 1 MiB".
+put_file() {
+    local img="$1" file="$2" dest="$3"
+    MTOOLS_SKIP_CHECK=1 mcopy -o -i "$img@@1M" "$file" "$dest"
+}
+
+# get_file <image> <::/src> <out> — read a file back out of the ESP.
+get_file() {
+    local img="$1" src="$2" out="$3"
+    MTOOLS_SKIP_CHECK=1 mcopy -o -i "$img@@1M" "$src" "$out"
 }
 
 # boot <dir> <logname> — boot that image with run.sh; echoes the exit status.
