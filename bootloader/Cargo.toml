@@ -1,0 +1,15 @@
+[package]
+name = "argus-bootloader"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "ARGUS UEFI loader: validates an ELF64 kernel, loads it, hands over control"
+
+[[bin]]
+name = "argus-bootloader"
+path = "src/main.rs"
+
+[dependencies]
+argus-shared = { path = "../shared" }
+# No third-party crates. The UEFI bindings are hand-written in src/efi.rs.
+# See ../deps.md.

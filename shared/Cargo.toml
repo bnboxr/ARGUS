@@ -1,0 +1,13 @@
+[package]
+name = "argus-shared"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "ARGUS BootInfo contract + COM1 serial driver, shared by loader and kernel"
+
+[lib]
+name = "argus_shared"
+path = "src/lib.rs"
+
+[dependencies]
+# Deliberately empty. See ../deps.md.

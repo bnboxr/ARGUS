@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["shared", "bootloader", "kernel"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+# Nothing here links a precompiled libc, so unwinding has no meaning.
+[profile.release]
+panic = "abort"
+opt-level = 2
+debug = true
+strip = false

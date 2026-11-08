@@ -1,0 +1,16 @@
+[package]
+name = "argus-kernel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "ARGUS Phase I proof kernel: receives BootInfo, prints it, halts"
+
+[[bin]]
+name = "argus-kernel"
+path = "src/main.rs"
+
+[dependencies]
+argus-shared = { path = "../shared" }
+
+[build-dependencies]
+# Deliberately empty. See ../deps.md.

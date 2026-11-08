@@ -1,0 +1,4 @@
+/target/
+dist/
+artifacts/OVMF_VARS.run.fd
+artifacts/negative/
