@@ -1,0 +1,51 @@
+[1m[run][0m firmware: /usr/share/OVMF/OVMF_CODE_4M.ms.fd
+[1m[run][0m vars:     /usr/share/OVMF/OVMF_VARS_4M.ms.fd -> /home/team/shared/argus/artifacts/OVMF_VARS.run.fd
+[1m[run][0m image:    /home/team/shared/argus/dist/argus-disk.img
+[1m[run][0m drive:    if=virtio
+[1m[run][0m log:      /home/team/shared/argus/artifacts/firmware-matrix/secureboot-virtio.log
+[1m[run][0m timeout:  10s
+[1m[run][0m qemu-system-x86_64 -machine q35 -m 128M -cpu max -drive if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.ms.fd -drive if=pflash,format=raw,unit=1,file=/home/team/shared/argus/artifacts/OVMF_VARS.run.fd -drive file=/home/team/shared/argus/dist/argus-disk.img,format=raw,if=virtio -serial stdio -display none -no-reboot -no-shutdown
+[2J[01;01H[=3h[2J[01;01H[2J[01;01H[=3h[2J[01;01H[2J[01;01H[=3h[2J[01;01HBdsDxe: loading Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0)
+BdsDxe: failed to load Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0): Access Denied
+
+>>Start PXE over IPv4.qemu-system-x86_64: terminating on signal 15 from pid 16513 (timeout)
+[1;31m[run] MISSING:[0m [ARGUS-LOADER] stage=banner event=start
+[1;31m[run] MISSING:[0m [ARGUS-LOADER] stage=memmap event=summary
+[1;31m[run] MISSING:[0m [ARGUS-LOADER] stage=acpi event=
+[1;31m[run] MISSING:[0m [ARGUS-LOADER] stage=gop event=
+[1;31m[run] MISSING:[0m [ARGUS-LOADER] stage=kernel-read event=ok
+[1;31m[run] MISSING:[0m [ARGUS-LOADER] stage=elf-validate result=ACCEPT
+[1;31m[run] MISSING:[0m [ARGUS-LOADER] stage=initrd event=
+[1;31m[run] MISSING:[0m [ARGUS-LOADER] stage=bootinfo event=sealed
+[1;31m[run] MISSING:[0m [ARGUS-LOADER] stage=exit-boot-services result=EFI_SUCCESS
+[1;31m[run] MISSING:[0m [ARGUS-LOADER] stage=handoff event=jump
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=entry event=banner
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=bootinfo event=checksum_ok
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=bootinfo field=abi_version
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=bootinfo field=abi_size
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=bootinfo field=flags
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=bootinfo field=checksum
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=bootinfo field=memory_map_meta
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=bootinfo field=memory_regions[0]
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=bootinfo field=acpi
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=bootinfo field=framebuffer
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=bootinfo field=initrd
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=bootinfo field=kernel_phys
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=bootinfo field=loader_reserved[0]
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=bootinfo field=boot_slot
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=bootinfo field=debug_serial
+[1;31m[run] MISSING:[0m [ARGUS-KERNEL] stage=halt event=boot_proven
+
+[1m[run][0m timing:
+      build_seconds=0.66
+      qemu_to_loader_banner_ms=
+      qemu_to_exit_boot_services_ms=
+      qemu_to_handoff_ms=
+      qemu_to_kernel_banner_ms=
+      qemu_to_kernel_halt_ms=
+      drive_interface=virtio
+      firmware=/usr/share/OVMF/OVMF_CODE_4M.ms.fd
+      run_utc=2026-11-08T21:22:30Z
+
+[1;31m[run] FAIL:[0m the kernel banner, a BootInfo field, or a loader stage is missing from the serial log.
+      The boot is NOT proven. Full log: /home/team/shared/argus/artifacts/firmware-matrix/secureboot-virtio.log

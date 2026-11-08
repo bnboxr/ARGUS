@@ -12,7 +12,10 @@ set -uo pipefail
 
 # Tests must never touch the real dist/: a failing test that leaves a corrupted
 # kernel in dist/ would make the next `./run.sh` lie about the build.
-WORK_ROOT="${ARGUS_TEST_WORK:-$ROOT/artifacts/negative}"
+# Test scratch space lives outside /home on purpose: each case needs its own
+# 16 MiB disk image, and /home is a 300 MB volume on the build machine. Only
+# the logs are kept, and they are small.
+WORK_ROOT="${ARGUS_TEST_WORK:-/opt/argus-test}"
 
 # Timeout for one test boot. The kernel reaches its halt marker at ~3.5 s; a
 # refused boot stops at ~3.4 s. 10 s is margin, not patience.
@@ -52,6 +55,12 @@ boot() {
     BOOT_TIMEOUT="$TEST_TIMEOUT" \
     "$ROOT/run.sh" > "$dir/$logname.stdout" 2>&1
     printf '%s\n' "$?"
+}
+
+# drop_image <dir> — delete the 16 MiB image once its boot has been recorded.
+# The log is the evidence; the image is not worth the disk.
+drop_image() {
+    rm -f "$1/dist/argus-disk.img"
 }
 
 # --- assertions ------------------------------------------------------------

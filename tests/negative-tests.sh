@@ -63,6 +63,7 @@ run_case() { # <name> <file|-> <expected-code> <expected-detail-substring>
     expect_absent "$log" "[ARGUS-KERNEL] stage=entry event=banner" "$name no kernel banner"
     expect_absent "$log" "stage=handoff event=jump" "$name no handoff"
     show_evidence "$log" "elf-validate|stage=handoff result=REFUSED|stage=kernel-read event=fail|reason=" "$name"
+    drop_image "$dir"
 }
 
 run_case bad-magic        "$WORK/bad-magic.elf"        E_MAGIC            "e_ident"

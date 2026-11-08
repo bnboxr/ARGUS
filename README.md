@@ -1,147 +1,216 @@
-# ARGUS — Phase I, milestone 1
+# ARGUS — Phase I, milestone 1: Boot Foundation
 
-A UEFI loader written from scratch in Rust that reads an ELF64 kernel off the
-boot volume, validates it, loads it, exits boot services and jumps to it — with
-every step logged to the serial port.
+A UEFI loader that validates an ELF64 kernel, fills a versioned BootInfo
+structure, calls `ExitBootServices`, and hands control to a kernel that prints
+its own banner and proves it arrived. Written from scratch in Rust for
+`x86_64-unknown-uefi` and `x86_64-unknown-none`. No Linux, no GRUB, no EDK2 code
+linked in.
 
-**STATUS: NOT COMPLETE.** The loader builds, boots under QEMU/OVMF and prints
-its banner, the full UEFI memory map and the volume-probe trace. It does **not**
-yet reach the kernel: on this OVMF build the firmware exposes no
-`EFI_SIMPLE_FILE_SYSTEM_PROTOCOL` *and* no `EFI_BLOCK_IO_PROTOCOL` handle by the
-time our image runs, so neither the firmware-filesystem path nor the built-in
-FAT16 reader can find `\ARGUSKRN.ELF`. See "Firmware notes" below for the
-measurements. Everything after `stage=kernel-read` is written but unproven.
+**Status: milestone 1 complete.** `./build.sh` and `./run.sh` exit 0 from a clean
+tree, the serial log shows the whole ordered trace, and every negative test in
+`tests/` fails the boot in the way it is supposed to.
 
-Nothing in this repo is claimed to work because it compiles. The serial log in
-`artifacts/boot.log` is the only evidence that counts.
+```
+./build.sh     # builds loader + kernel, assembles ESP, makes dist/argus-disk.img
+./run.sh       # boots it in QEMU; exit 0 only on the kernel's halt marker
+./tests/run-all.sh   # everything below, ~2 minutes
+```
 
-## Build
+The serial log of the last run is `artifacts/boot.log`; measured timings are in
+`artifacts/timing.txt`.
 
-    CARGO_TARGET_DIR=/opt/argus-target ./build.sh
+## Toolchain
 
-One command. Produces:
+Rust lives at `/opt/rust` on the build machine and `/etc/profile.d/rust.sh` puts
+it on `PATH` for new shells. If you are in a shell that predates that file:
 
-    dist/BOOTX64.EFI      the UEFI loader (PE32+)
-    dist/ARGUSKRN.ELF     the kernel (freestanding ELF64, ET_EXEC)
-    dist/argus-disk.img   16 MiB MBR disk, one 15 MiB FAT16 ESP
-    dist/esp/             the same tree as plain files
+```sh
+export RUSTUP_HOME=/opt/rust/rustup CARGO_HOME=/opt/rust/cargo
+export PATH=/opt/rust/cargo/bin:$PATH
+export CARGO_TARGET_DIR=/opt/argus-target   # /home is a 300 MB volume
+```
 
-`CARGO_TARGET_DIR` is only there because `/home` on the build machine is a
-300 MB volume; on a normal machine `./build.sh` alone is enough.
+Targets: `x86_64-unknown-uefi`, `x86_64-unknown-none`. Also needs `qemu-system-x86_64`,
+OVMF, `dosfstools`, `mtools`.
 
-Host prerequisites: `rustup target add x86_64-unknown-uefi x86_64-unknown-none`,
-`apt-get install -y qemu-system-x86 ovmf dosfstools mtools`.
+## The loading path that is actually active
 
-## Run
+This was the blocker for two sessions, and the cause was not the firmware.
 
-    ./run.sh
+**Route 1 — `LoadedImage->DeviceHandle` + `OpenProtocol(SIMPLE_FILE_SYSTEM)`.
+This is the path in use.** The loader asks the firmware for the handle it was
+itself loaded from and opens a filesystem on that exact handle. It does not
+enumerate handles and does not resolve a device path, so it cannot be confused by
+a device path that the firmware reports differently than expected.
 
-Boots `dist/argus-disk.img` under QEMU with OVMF, `-serial stdio`, no display.
-The full serial log is captured to `artifacts/boot.log`. Exit status:
+Route 2 (`LocateDevicePath`) and route 3 (`LocateHandleBuffer`) are kept as
+ordered fallbacks, each logging its own result, so the log says which one worked:
 
-* `0` — the kernel printed its own banner and reached its halt marker
-* `1` — it did not; the log says where the boot stopped
-* other — QEMU itself failed to start (passed through unchanged)
+```
+[ARGUS-LOADER] stage=volume route=loaded_image_device_handle found=1 handles=1
+[ARGUS-LOADER] stage=volume route=locate_handle_buffer found=1 handles=1
+```
 
-The VM is stopped by `timeout` (default 25 s) because the kernel ends in
-`loop { hlt }` by design; QEMU has no reason to exit on its own.
+Then `\ARGUSKRN.ELF` and `\INITRD.BIN` are read through `EFI_FILE_PROTOCOL`.
 
-Exact command, as printed by `run.sh`:
+If no SimpleFileSystem appears on any route, the loader falls back to `BlockIo`
+on the same device handle plus its own FAT16 reader (`bootloader/src/fat.rs`),
+and only if that is also absent does it refuse the boot with
+`reason=kernel_file_not_found_on_any_route`. The embedded-kernel fallback
+described in the brief was **not needed and is not implemented** — the canonical
+route works.
 
-    qemu-system-x86_64 -machine q35 -m 128M -cpu max \
-      -drive if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
-      -drive if=pflash,format=raw,unit=1,file=artifacts/OVMF_VARS.run.fd \
-      -drive file=dist/argus-disk.img,format=raw,if=virtio \
-      -serial stdio -display none -no-reboot -no-shutdown
+### Why it looked like "the firmware has no storage driver"
 
-Firmware: `/usr/share/OVMF/OVMF_CODE_4M.fd` (3653632 bytes) with a throwaway
-copy of `/usr/share/OVMF/OVMF_VARS_4M.fd`. The system VARS file is never
-written to, so runs are reproducible.
+`EFI_SIMPLE_FILE_SYSTEM_PROTOCOL` was written in `bootloader/src/efi.rs` with one
+byte wrong:
 
-## What each stage prints
+```
+spec:  964E5B22-6459-11D2-8E39-00A0C969723B
+ours:  964E5B22-6459-11D2-8E9A-00A0C969723B   <- 0x9A where 0x39 belongs
+```
 
-Stages are `<stage> <event>` pairs and appear in this order.
+A GUID is an opaque 128-bit value. A wrong one does not fail; `LocateHandleBuffer`
+simply returns zero handles, which reads exactly like "this firmware has no
+filesystem driver". Correcting that single byte made the kernel boot, with no
+other change to the enumeration code.
 
-| stage | meaning |
-|-------|---------|
-| `serial init` | COM1 programmed to 115200 8N1; `uart_present=` says whether the port answered |
-| `banner start` | loader name, version, BootInfo version |
-| `banner system_table` | UEFI revision, config table entry count |
-| `memmap received` / `memmap entry=N` / `memmap summary` | every UEFI descriptor, then a summary |
-| `kernel-read loaded_image` | our own image base/size and device handle |
-| `kernel-read reconnect` | DisconnectController/ConnectController status |
-| `kernel-read volume_probe` | three independent attempts to find a filesystem |
-| `kernel-read block_probe` | block-level FAT16 volume scan |
-| `elf-validate ACCEPT/REJECT` | validation result; a rejection carries a named code |
-| `elf-load segment=N` | destination address of each `PT_LOAD` |
-| `bootinfo filled` | address, magic, version, size, counts |
-| `exit-boot-services attempt/result` | `EFI_SUCCESS` or a status |
-| `handoff jump` | entry point and BootInfo pointer, ABI note |
-| `[ARGUS-KERNEL] entry banner` | the kernel's own first line — the proof |
-| `[ARGUS-KERNEL] bootinfo field=...` | every BootInfo field, walked |
-| `[ARGUS-KERNEL] halt boot_proven` | final marker before `loop { hlt }` |
+`tests/protocol-guid.py` now checks every GUID constant in `efi.rs` against the
+UEFI/ACPI specification text, and `tests/run-all.sh` runs it first because it
+costs nothing and would have caught this immediately.
 
-## ELF validation — named rejection codes
+## Firmware × drive-interface matrix
 
-`bootloader/src/elf.rs`, applied in order, first failure wins:
+One change at a time, plain `OVMF_CODE_4M.fd` unless stated. `sfs` = the
+`LoadedImage->DeviceHandle` route found a filesystem. `loader` = our banner
+reached the serial port at all (i.e. the firmware chose to run us). `kernel` =
+the kernel's `boot_proven` halt marker.
 
-`E_HEADER_TRUNCATED` `E_MAGIC` `E_CLASS` `E_ENDIAN` `E_MACHINE` `E_TYPE`
-`E_PHENTSIZE` `E_NO_PHDRS` `E_TOO_MANY_PHDRS` `E_PHDR_TRUNCATED`
-`E_SEGMENT_TRUNCATED` `E_SEGMENT_SIZE` `E_NO_LOAD_SEGMENTS` `E_TOO_MANY_SEGMENTS`
-`E_SEGMENTS_OVERLAP` `E_VADDR_UNUSABLE` `E_ENTRY_NOT_IN_TEXT` `E_OVERLAPS_LOADER`
+| case | drive | firmware | sfs | loader | kernel | run.sh |
+|---|---|---|---|---|---|---|
+| plain-virtio | `if=virtio` | `OVMF_CODE_4M.fd` | **yes** | yes | **yes** | 0 |
+| plain-ide | `if=ide` | `OVMF_CODE_4M.fd` | **yes** | yes | **yes** | 0 |
+| plain-nvme | `if=nvme` | `OVMF_CODE_4M.fd` | no | no | no | 1 |
+| secureboot-virtio | `if=virtio` | `OVMF_CODE_4M.ms.fd` | no | no | no | 1 |
+| plain-sata | `if=sata` | — | — | — | — | not run |
 
-`tests/negative-tests.sh` corrupts a copy of the kernel three ways and asserts
-the matching code appears and the kernel banner does not.
+Reproduce with `./tests/firmware-matrix.sh`; it writes
+`artifacts/firmware-matrix.txt` and keeps each serial log.
 
-## BootInfo
+Reading the table honestly:
 
-`shared/src/bootinfo.rs`. `#[repr(C)]`, `version` and `size` first so a kernel
-built against an older header refuses a newer structure instead of misreading
-it. Every field is documented at its declaration. It lives in the loader's own
-image (a static), never in `AllocatePool` memory, because all of that is
-released at `ExitBootServices`.
+* **virtio and ide both work end to end.** The canonical route finds the volume on
+  both, and the kernel boots on both. That is the claim this milestone makes.
+* **nvme never reaches us.** The firmware enumerates the device and tries to boot
+  it, then refuses:
+  `BdsDxe: failed to load Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x3,0x0): Access Denied`,
+  after which it falls through to PXE. Our code never runs, so this says nothing
+  about the loader — it is a firmware BDS policy question, and it is the reason
+  "we support NVMe" cannot be claimed yet.
+* **Secure Boot refuses the unsigned loader.** Expected: signing and key
+  enrolment are Phase I slice 2. The row is here so that when slice 2 lands, the
+  same command shows the change.
+* **`if=sata` is not a QEMU bus type** — QEMU 8.2 rejects it (`unsupported bus
+  type 'sata'`), so that row is a harness limitation, not a firmware finding.
+  Testing AHCI needs an explicit `-device ahci` plus a drive on its bus. Left as a
+  follow-up rather than reported as a result.
+* Only the 4 MiB OVMF blobs exist on this machine; there is no 2 MiB
+  `OVMF_CODE.fd` to test.
 
-## Firmware notes — the current blocker
+## BootInfo v1
 
-Measured on QEMU 8.2.2 + OVMF_CODE_4M.fd, and reproducible with `./run.sh`:
+Frozen. Full field-by-field ABI, offsets, checksum definition and the reason each
+field cannot be added later: **[BOOTINFO.md](BOOTINFO.md)**.
 
-* 238 handles exist; 102 carry `EFI_LOADED_IMAGE_PROTOCOL`, 34 carry
-  `EFI_DEVICE_PATH_PROTOCOL`, **0 carry `EFI_SIMPLE_FILE_SYSTEM_PROTOCOL`**.
-  The search itself is fine: `LocateHandleBuffer(ByProtocol, DevicePath)`
-  returns 34, so the GUID and the table offsets are right.
-* `LoadedImage.FilePath` is a bare `MEDIA_FILEPATH_DP` node
-  (`\EFI\BOOT\BOOTX64.EFI`) over `PciRoot(0x0)/Pci(0x3,0x0)` — a *relative*
-  path, so `LocateDevicePath` cannot resolve a volume from it either.
-* `DisconnectController` + recursive `ConnectController` on the device handle
-  both return `EFI_SUCCESS`, and the filesystem still does not appear.
-* `EFI_BLOCK_IO_PROTOCOL` enumeration also finds nothing, which is why the
-  built-in FAT16 reader (`bootloader/src/fat.rs`) cannot help either.
+Header: `magic`, `abi_version=1`, `abi_size=7040`, `flags`, `checksum` (CRC-32 over
+the whole structure with those 4 bytes zeroed). The kernel checks magic, version,
+size, then checksum, then unknown flags — in that order — and refuses to continue
+on any mismatch.
 
-So the firmware read our file and then left us with no route back to the
-volume. Next steps, in the order worth trying:
+The loader seals **once**, after `ExitBootServices` has succeeded and `map_key` is
+final. An earlier version sealed twice, and the second seal silently repaired
+corruption injected between them; `tests/bootinfo-checksum.sh` caught that, and
+the fix is the ordering you see now.
 
-1. Reproduce with the plain `OVMF_CODE.fd` (2 MiB, non-secure-boot) and with
-   `-drive if=ide`, to separate "OVMF build quirk" from "virtio path".
-2. If the drivers are genuinely absent, embed the kernel path in the loader's
-   own device-path lookup by walking `SimpleFileSystem` from
-   `gEfiLoadedImageDevicePathGuid`, or read the volume through
-   `EFI_PCI_IO_PROTOCOL` directly.
-3. Failing all that, this is a firmware/driver-availability finding worth
-   recording for the security audit: the boot trust root currently depends on
-   a firmware driver the loader cannot re-obtain.
+## Measured timings
 
-## Layout
+From `artifacts/timing.txt`, wall clock on this machine, not estimates:
 
-    shared/      BootInfo contract + COM1 UART driver (#![no_std], no deps)
-    bootloader/  UEFI application: efi.rs (bindings), elf.rs (validation),
-                 fat.rs (FAT16 reader), main.rs (the flow)
-    kernel/      proof kernel: asm trampoline, bss zeroing, own stack,
-                 banner, BootInfo dump, loop { hlt }
-    tests/       negative ELF tests, broken-kernel test
-    build.sh     one command, exits non-zero on any failure
-    run.sh       one command, exits non-zero if the kernel never proves itself
-    deps.md      third-party crates: none
+| event | ms from QEMU launch |
+|---|---|
+| loader banner | ~3150 |
+| `ExitBootServices` returned | ~3370 |
+| jump to kernel | ~3370 |
+| kernel banner | ~3373 |
+| kernel halt marker | ~3550 |
 
-> **Not yet verified.** Both test scripts are written but have never produced
-> a PASS line, because the boot does not yet reach ELF validation. They must be
-> run and pasted into the report before this milestone can be called done.
+`./build.sh` takes **0.75 s** for an incremental release build (clean: ~40 s).
+Almost all of the boot time is OVMF itself; our loader accounts for roughly
+200 ms of it.
+
+## Tests
+
+| test | what it proves |
+|---|---|
+| `tests/protocol-guid.py` | every EFI GUID matches the specification (7/7) |
+| `./run.sh` | the positive boot, end to end |
+| `tests/negative-tests.sh` | `E_MAGIC`, `E_PHDR_TRUNCATED`, `E_VADDR_UNUSABLE`, kernel-missing — each distinct, each refuses to jump |
+| `tests/break-kernel.sh` | `run.sh` exits 1 on a non-ELF kernel and on a missing kernel |
+| `tests/bootinfo-checksum.sh` | a BootInfo corrupted after sealing is refused (`E_BOOTINFO_CHECKSUM`) |
+| `tests/firmware-matrix.sh` | the table above |
+
+Each test boots a private copy of the disk image under `/opt/argus-test`
+(override with `ARGUS_TEST_WORK`), so `dist/` is never modified and the 300 MB
+`/home` volume is not filled by 16 MiB images.
+
+## Repository layout
+
+```
+bootloader/     UEFI application: efi.rs (protocol bindings), elf.rs (validation),
+                fat.rs (BlockIo fallback), serial.rs, main.rs (the boot flow)
+kernel/         x86-64 freestanding kernel: entry, serial, BootInfo validation
+shared/         bootinfo.rs — the ABI, compiled into both sides
+build.sh        builds both, assembles the ESP, builds INITRD.BIN, makes the image
+run.sh          QEMU harness with per-line timestamps; exit status is the verdict
+tests/          the tests above
+BOOTINFO.md     the frozen ABI
+```
+
+## Security findings for the boot trust root
+
+These go to the security architect; they are recorded here because they were
+learned the hard way in this milestone.
+
+1. **The loader inherits the firmware's storage stack and cannot verify it.** Every
+   byte of the kernel image is read through `EFI_FILE_PROTOCOL` on a filesystem
+   driver the firmware provides. On a machine whose firmware is compromised, the
+   loader's ELF validation and BootInfo checksum are both operating on
+   attacker-chosen bytes. Nothing in Phase I slice 1 establishes any trust in that
+   stack. This is precisely what measured boot plus signature verification in
+   slice 2 has to close, and it is an argument for measuring the loader *before*
+   it reads anything, not after.
+2. **A missing protocol cannot be inferred from an empty result.** Two sessions
+   concluded "the firmware ships no storage driver" from `LocateHandleBuffer`
+   returning zero handles, when the real cause was a single wrong byte in a GUID.
+   Any security decision of the form "the firmware does not offer X, therefore we
+   fall back to Y" needs the negative case proven against a known-good constant
+   first, or it becomes an attacker-controlled downgrade path. Concretely: the
+   BlockIo/FAT16 fallback in this loader must never be reachable by an adversary
+   simply withholding a protocol.
+3. **The firmware chose whether to run us at all.** The nvme row shows the
+   firmware declining to load our image (`Access Denied`) and moving on. Boot
+   policy is the firmware's, not ours, until we own the boot manager.
+4. **`ExitBootServices` is not a boundary we control.** Between the last
+   `GetMemoryMap` and a successful `ExitBootServices`, the map can change and the
+   call fails; the loader retries by re-reading the map. That window is a place
+   where a hostile runtime-services implementation could influence what the kernel
+   is told about memory.
+
+## Not done yet (Phase I, next slices)
+
+* Image and manifest signing, keys, anti-rollback, TPM 2.0 measured boot (slice 2).
+* Boot entries, A/B slots with confirmation and rollback, recovery (slice 3).
+  `boot_slot` and `boot_reason` exist in BootInfo and are honestly constant today.
+* Renderer, Boot Manager UI, cinematic boot animation (slice 4).
+* Real-hardware boot on the owner's PC. Everything above is QEMU + OVMF.
+* AHCI/SATA coverage, and whatever makes OVMF's BDS accept the NVMe device.

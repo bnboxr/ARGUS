@@ -520,32 +520,10 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     }
     bi.flags = flags;
 
-    // Seal last: every field above must be final, because the checksum covers
-    // all of them.
-    bi.seal();
-    let _ = writeln!(
-        ser,
-        "[ARGUS-LOADER] stage=bootinfo event=sealed address=0x{:x} magic=0x{:x} abi_version={} abi_size={} checksum=0x{:08x} flags=0x{:x}",
-        addr_of!(BOOT_INFO) as usize,
-        bi.magic,
-        bi.abi_version,
-        bi.abi_size,
-        bi.checksum,
-        bi.flags
-    );
-
-    // Test hook: `tests/bootinfo-checksum.sh` builds the loader with
-    // `--cfg argus_test_corrupt_bootinfo` and this flips a flag bit *after*
-    // sealing, which is exactly the silent-corruption case the kernel's
-    // checksum check exists for. Never compiled into a normal build.
-    #[cfg(argus_test_corrupt_bootinfo)]
-    {
-        bi.flags |= bootinfo::FLAG_TEST_CORRUPTED;
-        let _ = writeln!(
-            ser,
-            "[ARGUS-LOADER] stage=bootinfo event=test_corruption injected=1 field=flags bit=15"
-        );
-    }
+    // The structure is *not* sealed yet: `map_key` is only final after
+    // `ExitBootServices` succeeds, and sealing twice would mean the checksum
+    // the kernel verifies is not the one computed over the fields it read.
+    // One seal, immediately before the jump.
 
     // Print the fields the kernel will read, so the two traces can be compared
     // line for line.
@@ -611,15 +589,35 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     }
 
     // The map key that actually worked is the one the kernel needs to reason
-    // about the map it was handed, so record it (the seal has to be redone,
-    // because this is a covered field).
+    // about the map it was handed, so record it before sealing.
     bi.map_key = map_key as u64;
+
+    // The single seal. Every field above is final from here on, because the
+    // checksum covers all of them.
     bi.seal();
     let _ = writeln!(
         ser,
-        "[ARGUS-LOADER] stage=bootinfo event=resealed reason=map_key_from_successful_exit map_key=0x{:x} checksum=0x{:08x}",
-        bi.map_key, bi.checksum
+        "[ARGUS-LOADER] stage=bootinfo event=sealed address=0x{:x} magic=0x{:x} abi_version={} abi_size={} checksum=0x{:08x} flags=0x{:x}",
+        addr_of!(BOOT_INFO) as usize,
+        bi.magic,
+        bi.abi_version,
+        bi.abi_size,
+        bi.checksum,
+        bi.flags
     );
+
+    // Test hook: `tests/bootinfo-checksum.sh` builds the loader with
+    // `--cfg argus_test_corrupt_bootinfo` and this flips a flag bit *after*
+    // sealing, which is exactly the silent-corruption case the kernel's
+    // checksum check exists for. Never compiled into a normal build.
+    #[cfg(argus_test_corrupt_bootinfo)]
+    {
+        bi.flags |= bootinfo::FLAG_TEST_CORRUPTED;
+        let _ = writeln!(
+            ser,
+            "[ARGUS-LOADER] stage=bootinfo event=test_corruption injected=1 field=flags bit=15 checksum_now_stale=1"
+        );
+    }
 
     // ---- stage: handoff --------------------------------------------------
     // Nothing below this line may call a boot service: they are gone.

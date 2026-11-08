@@ -1,0 +1,6 @@
+case                         drive    firmware                 sfs  loader kernel  status
+plain-virtio                 virtio   OVMF_CODE_4M.fd          yes  yes    yes     exit=0
+plain-ide                    ide      OVMF_CODE_4M.fd          yes  yes    yes     exit=0
+plain-sata                   sata     OVMF_CODE_4M.fd          no   no     no      exit=1
+plain-nvme                   nvme     OVMF_CODE_4M.fd          no   no     no      exit=1
+secureboot-virtio            virtio   OVMF_CODE_4M.ms.fd       no   no     no      exit=1

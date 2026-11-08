@@ -1,0 +1,356 @@
+[1m[run][0m firmware: /usr/share/OVMF/OVMF_CODE_4M.fd
+[1m[run][0m vars:     /usr/share/OVMF/OVMF_VARS_4M.fd -> /home/team/shared/argus/artifacts/OVMF_VARS.run.fd
+[1m[run][0m image:    /home/team/shared/argus/dist/argus-disk.img
+[1m[run][0m drive:    if=ide
+[1m[run][0m log:      /home/team/shared/argus/artifacts/firmware-matrix/plain-ide.log
+[1m[run][0m timeout:  10s
+[1m[run][0m qemu-system-x86_64 -machine q35 -m 128M -cpu max -drive if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd -drive if=pflash,format=raw,unit=1,file=/home/team/shared/argus/artifacts/OVMF_VARS.run.fd -drive file=/home/team/shared/argus/dist/argus-disk.img,format=raw,if=ide -serial stdio -display none -no-reboot -no-shutdown
+[2J[01;01H[=3h[2J[01;01H[2J[01;01H[=3h[2J[01;01H[2J[01;01H[=3h[2J[01;01HBdsDxe: loading Boot0001 "UEFI QEMU HARDDISK QM00001 " from PciRoot(0x0)/Pci(0x1F,0x2)/Sata(0x0,0xFFFF,0x0)
+BdsDxe: starting Boot0001 "UEFI QEMU HARDDISK QM00001 " from PciRoot(0x0)/Pci(0x1F,0x2)/Sata(0x0,0xFFFF,0x0)
+[ARGUS-LOADER] stage=serial event=init port=0x3f8 baud=115200 uart_present=1
+[ARGUS-LOADER] stage=banner event=start name=ARGUS loader=uefi-x86_64 version=0.2.0 abi_version=1
+[ARGUS-LOADER] stage=banner event=system_table revision=0x20046 config_entries=11 boot_services=0x7eaff00
+[ARGUS-LOADER] stage=banner event=watchdog_disabled status=0x0
+[ARGUS-LOADER] stage=reserve index=0 kind=memmap_buffer start=0x6171018 len=0x10000 end=0x6181018
+[ARGUS-LOADER] stage=memmap event=received entries=127 bytes=6096 descriptor_size=48 descriptor_version=0x1 map_key=0xb0c
+[ARGUS-LOADER] stage=memmap entry=0 type=3 name=BootServicesCode start=0x0 pages=1 end=0x1000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=1 type=7 name=ConventionalMemory start=0x1000 pages=159 end=0xa0000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=2 type=7 name=ConventionalMemory start=0x100000 pages=1792 end=0x800000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=3 type=10 name=ACPIMemoryNVS start=0x800000 pages=8 end=0x808000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=4 type=7 name=ConventionalMemory start=0x808000 pages=3 end=0x80b000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=5 type=10 name=ACPIMemoryNVS start=0x80b000 pages=1 end=0x80c000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=6 type=7 name=ConventionalMemory start=0x80c000 pages=4 end=0x810000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=7 type=10 name=ACPIMemoryNVS start=0x810000 pages=240 end=0x900000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=8 type=4 name=BootServicesData start=0x900000 pages=3712 end=0x1780000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=9 type=7 name=ConventionalMemory start=0x1780000 pages=10229 end=0x3f75000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=10 type=4 name=BootServicesData start=0x3f75000 pages=32 end=0x3f95000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=11 type=7 name=ConventionalMemory start=0x3f95000 pages=8668 end=0x6171000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=12 type=2 name=LoaderData start=0x6171000 pages=17 end=0x6182000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=13 type=1 name=LoaderCode start=0x6182000 pages=16 end=0x6192000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=14 type=7 name=ConventionalMemory start=0x6192000 pages=9 end=0x619b000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=15 type=4 name=BootServicesData start=0x619b000 pages=2035 end=0x698e000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=16 type=3 name=BootServicesCode start=0x698e000 pages=180 end=0x6a42000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=17 type=4 name=BootServicesData start=0x6a42000 pages=48 end=0x6a72000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=18 type=3 name=BootServicesCode start=0x6a72000 pages=225 end=0x6b53000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=19 type=4 name=BootServicesData start=0x6b53000 pages=101 end=0x6bb8000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=20 type=3 name=BootServicesCode start=0x6bb8000 pages=9 end=0x6bc1000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=21 type=4 name=BootServicesData start=0x6bc1000 pages=5 end=0x6bc6000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=22 type=3 name=BootServicesCode start=0x6bc6000 pages=32 end=0x6be6000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=23 type=4 name=BootServicesData start=0x6be6000 pages=2 end=0x6be8000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=24 type=3 name=BootServicesCode start=0x6be8000 pages=10 end=0x6bf2000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=25 type=4 name=BootServicesData start=0x6bf2000 pages=1 end=0x6bf3000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=26 type=3 name=BootServicesCode start=0x6bf3000 pages=8 end=0x6bfb000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=27 type=4 name=BootServicesData start=0x6bfb000 pages=1 end=0x6bfc000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=28 type=3 name=BootServicesCode start=0x6bfc000 pages=16 end=0x6c0c000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=29 type=4 name=BootServicesData start=0x6c0c000 pages=3 end=0x6c0f000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=30 type=3 name=BootServicesCode start=0x6c0f000 pages=3 end=0x6c12000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=31 type=4 name=BootServicesData start=0x6c12000 pages=7 end=0x6c19000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=32 type=3 name=BootServicesCode start=0x6c19000 pages=18 end=0x6c2b000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=33 type=4 name=BootServicesData start=0x6c2b000 pages=9 end=0x6c34000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=34 type=3 name=BootServicesCode start=0x6c34000 pages=14 end=0x6c42000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=35 type=4 name=BootServicesData start=0x6c42000 pages=15 end=0x6c51000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=36 type=3 name=BootServicesCode start=0x6c51000 pages=11 end=0x6c5c000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=37 type=4 name=BootServicesData start=0x6c5c000 pages=11 end=0x6c67000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=38 type=3 name=BootServicesCode start=0x6c67000 pages=22 end=0x6c7d000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=39 type=4 name=BootServicesData start=0x6c7d000 pages=9 end=0x6c86000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=40 type=3 name=BootServicesCode start=0x6c86000 pages=36 end=0x6caa000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=41 type=4 name=BootServicesData start=0x6caa000 pages=3 end=0x6cad000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=42 type=3 name=BootServicesCode start=0x6cad000 pages=20 end=0x6cc1000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=43 type=4 name=BootServicesData start=0x6cc1000 pages=7 end=0x6cc8000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=44 type=3 name=BootServicesCode start=0x6cc8000 pages=25 end=0x6ce1000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=45 type=4 name=BootServicesData start=0x6ce1000 pages=3 end=0x6ce4000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=46 type=3 name=BootServicesCode start=0x6ce4000 pages=6 end=0x6cea000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=47 type=4 name=BootServicesData start=0x6cea000 pages=2 end=0x6cec000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=48 type=3 name=BootServicesCode start=0x6cec000 pages=19 end=0x6cff000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=49 type=4 name=BootServicesData start=0x6cff000 pages=5 end=0x6d04000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=50 type=3 name=BootServicesCode start=0x6d04000 pages=22 end=0x6d1a000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=51 type=4 name=BootServicesData start=0x6d1a000 pages=2 end=0x6d1c000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=52 type=3 name=BootServicesCode start=0x6d1c000 pages=13 end=0x6d29000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=53 type=4 name=BootServicesData start=0x6d29000 pages=3 end=0x6d2c000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=54 type=3 name=BootServicesCode start=0x6d2c000 pages=6 end=0x6d32000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=55 type=4 name=BootServicesData start=0x6d32000 pages=2 end=0x6d34000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=56 type=3 name=BootServicesCode start=0x6d34000 pages=1 end=0x6d35000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=57 type=4 name=BootServicesData start=0x6d35000 pages=1 end=0x6d36000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=58 type=3 name=BootServicesCode start=0x6d36000 pages=5 end=0x6d3b000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=59 type=4 name=BootServicesData start=0x6d3b000 pages=5 end=0x6d40000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=60 type=3 name=BootServicesCode start=0x6d40000 pages=12 end=0x6d4c000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=61 type=4 name=BootServicesData start=0x6d4c000 pages=2 end=0x6d4e000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=62 type=3 name=BootServicesCode start=0x6d4e000 pages=29 end=0x6d6b000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=63 type=4 name=BootServicesData start=0x6d6b000 pages=1 end=0x6d6c000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=64 type=3 name=BootServicesCode start=0x6d6c000 pages=10 end=0x6d76000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=65 type=4 name=BootServicesData start=0x6d76000 pages=1 end=0x6d77000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=66 type=3 name=BootServicesCode start=0x6d77000 pages=1 end=0x6d78000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=67 type=4 name=BootServicesData start=0x6d78000 pages=2 end=0x6d7a000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=68 type=3 name=BootServicesCode start=0x6d7a000 pages=21 end=0x6d8f000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=69 type=4 name=BootServicesData start=0x6d8f000 pages=3 end=0x6d92000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=70 type=3 name=BootServicesCode start=0x6d92000 pages=2 end=0x6d94000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=71 type=4 name=BootServicesData start=0x6d94000 pages=2 end=0x6d96000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=72 type=3 name=BootServicesCode start=0x6d96000 pages=7 end=0x6d9d000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=73 type=4 name=BootServicesData start=0x6d9d000 pages=8 end=0x6da5000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=74 type=3 name=BootServicesCode start=0x6da5000 pages=4 end=0x6da9000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=75 type=4 name=BootServicesData start=0x6da9000 pages=6 end=0x6daf000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=76 type=3 name=BootServicesCode start=0x6daf000 pages=1 end=0x6db0000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=77 type=4 name=BootServicesData start=0x6db0000 pages=1 end=0x6db1000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=78 type=3 name=BootServicesCode start=0x6db1000 pages=62 end=0x6def000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=79 type=4 name=BootServicesData start=0x6def000 pages=3 end=0x6df2000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=80 type=3 name=BootServicesCode start=0x6df2000 pages=4 end=0x6df6000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=81 type=4 name=BootServicesData start=0x6df6000 pages=7 end=0x6dfd000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=82 type=3 name=BootServicesCode start=0x6dfd000 pages=3 end=0x6e00000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=83 type=4 name=BootServicesData start=0x6e00000 pages=513 end=0x7001000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=84 type=3 name=BootServicesCode start=0x7001000 pages=8 end=0x7009000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=85 type=4 name=BootServicesData start=0x7009000 pages=5 end=0x700e000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=86 type=6 name=RuntimeServicesData start=0x700e000 pages=193 end=0x70cf000 attr=0x800000000000000f
+[ARGUS-LOADER] stage=memmap entry=87 type=3 name=BootServicesCode start=0x70cf000 pages=21 end=0x70e4000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=88 type=4 name=BootServicesData start=0x70e4000 pages=2 end=0x70e6000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=89 type=3 name=BootServicesCode start=0x70e6000 pages=4 end=0x70ea000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=90 type=4 name=BootServicesData start=0x70ea000 pages=2 end=0x70ec000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=91 type=3 name=BootServicesCode start=0x70ec000 pages=8 end=0x70f4000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=92 type=4 name=BootServicesData start=0x70f4000 pages=1 end=0x70f5000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=93 type=3 name=BootServicesCode start=0x70f5000 pages=1 end=0x70f6000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=94 type=4 name=BootServicesData start=0x70f6000 pages=1 end=0x70f7000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=95 type=3 name=BootServicesCode start=0x70f7000 pages=1 end=0x70f8000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=96 type=4 name=BootServicesData start=0x70f8000 pages=1 end=0x70f9000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=97 type=3 name=BootServicesCode start=0x70f9000 pages=3 end=0x70fc000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=98 type=4 name=BootServicesData start=0x70fc000 pages=2 end=0x70fe000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=99 type=3 name=BootServicesCode start=0x70fe000 pages=23 end=0x7115000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=100 type=4 name=BootServicesData start=0x7115000 pages=2 end=0x7117000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=101 type=3 name=BootServicesCode start=0x7117000 pages=2 end=0x7119000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=102 type=4 name=BootServicesData start=0x7119000 pages=1042 end=0x752b000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=103 type=3 name=BootServicesCode start=0x752b000 pages=4 end=0x752f000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=104 type=4 name=BootServicesData start=0x752f000 pages=2 end=0x7531000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=105 type=3 name=BootServicesCode start=0x7531000 pages=6 end=0x7537000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=106 type=4 name=BootServicesData start=0x7537000 pages=6 end=0x753d000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=107 type=3 name=BootServicesCode start=0x753d000 pages=10 end=0x7547000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=108 type=4 name=BootServicesData start=0x7547000 pages=1 end=0x7548000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=109 type=3 name=BootServicesCode start=0x7548000 pages=5 end=0x754d000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=110 type=4 name=BootServicesData start=0x754d000 pages=928 end=0x78ed000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=111 type=6 name=RuntimeServicesData start=0x78ed000 pages=256 end=0x79ed000 attr=0x800000000000000f
+[ARGUS-LOADER] stage=memmap entry=112 type=5 name=RuntimeServicesCode start=0x79ed000 pages=256 end=0x7aed000 attr=0x800000000000000f
+[ARGUS-LOADER] stage=memmap entry=113 type=0 name=Reserved start=0x7aed000 pages=128 end=0x7b6d000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=114 type=9 name=ACPIReclaimMemory start=0x7b6d000 pages=18 end=0x7b7f000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=115 type=10 name=ACPIMemoryNVS start=0x7b7f000 pages=128 end=0x7bff000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=116 type=4 name=BootServicesData start=0x7bff000 pages=513 end=0x7e00000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=117 type=7 name=ConventionalMemory start=0x7e00000 pages=119 end=0x7e77000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=118 type=4 name=BootServicesData start=0x7e77000 pages=32 end=0x7e97000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=119 type=3 name=BootServicesCode start=0x7e97000 pages=51 end=0x7eca000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=120 type=4 name=BootServicesData start=0x7eca000 pages=17 end=0x7edb000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=121 type=3 name=BootServicesCode start=0x7edb000 pages=25 end=0x7ef4000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=122 type=6 name=RuntimeServicesData start=0x7ef4000 pages=132 end=0x7f78000 attr=0x800000000000000f
+[ARGUS-LOADER] stage=memmap entry=123 type=10 name=ACPIMemoryNVS start=0x7f78000 pages=136 end=0x8000000 attr=0xf
+[ARGUS-LOADER] stage=memmap entry=124 type=0 name=Reserved start=0xe0000000 pages=65536 end=0xf0000000 attr=0x1
+[ARGUS-LOADER] stage=memmap entry=125 type=11 name=MemoryMappedIO start=0xffc00000 pages=1024 end=0x100000000 attr=0x8000000000000001
+[ARGUS-LOADER] stage=memmap entry=126 type=0 name=Reserved start=0xfd00000000 pages=3145728 end=0x10000000000 attr=0x0
+[ARGUS-LOADER] stage=memmap event=summary entries=127 copied=127 usable_bytes=0x79c8000 clamped=0
+[ARGUS-LOADER] stage=acpi event=found pass=1 phys=0x7b7e014 revision=2 length=36 checksum_sum=0x00 valid=1
+[ARGUS-LOADER] stage=gop event=present mode=0 max_mode=30 base=0x80000000 size=0x3e8000 resolution=1280x800 stride=1280 format=BGRx8
+[ARGUS-LOADER] stage=kernel-read event=loaded_image base=0x6182000 size=0x10000 device_handle=0x671a598
+[ARGUS-LOADER] stage=reserve index=1 kind=loader_image start=0x6182000 len=0x10000 end=0x6192000
+[ARGUS-LOADER] stage=reserve index=2 kind=bootinfo start=0x618e000 len=0x1b80 end=0x618fb80
+[ARGUS-LOADER] stage=reserve index=3 kind=jump_stack start=0x618c000 len=0x2000 end=0x618e000
+[ARGUS-LOADER] stage=kernel-read event=volume_probe route=loaded_image_device_handle handle=0x671a598 found=1
+[ARGUS-LOADER] stage=kernel-read event=ok path=\ARGUSKRN.ELF bytes=812920 buffer=0x60aa018
+[ARGUS-LOADER] stage=reserve index=4 kind=kernel_file_buffer start=0x60aa018 len=0xc6778 end=0x6170790
+[ARGUS-LOADER] stage=elf-validate result=ACCEPT entry=0x1000000 segments=4 phnum=6 image_bytes=13753
+[ARGUS-LOADER] stage=initrd event=loaded path=\INITRD.BIN phys=0x6199000 len=0x1000 pages=1
+[ARGUS-LOADER] stage=elf-load segment=0 paddr=0x1000000 vaddr=0x1000000 file_offset=0x1000 filesz=0x240f memsz=0x240f flags=0x5
+[ARGUS-LOADER] stage=elf-load segment=1 paddr=0x1002410 vaddr=0x1002410 file_offset=0x3410 filesz=0x10e2 memsz=0x10e2 flags=0x4
+[ARGUS-LOADER] stage=elf-load segment=2 paddr=0x10034f8 vaddr=0x10034f8 file_offset=0x44f8 filesz=0x80 memsz=0x80 flags=0x6
+[ARGUS-LOADER] stage=elf-load segment=3 paddr=0x1003580 vaddr=0x1003580 file_offset=0x4580 filesz=0x48 memsz=0x4050 flags=0x6
+[ARGUS-LOADER] stage=elf-load segment=0 result=COPIED dst=0x1000000 from_file=0x1000 zero_filled=0x0
+[ARGUS-LOADER] stage=elf-load segment=1 result=COPIED dst=0x1002410 from_file=0x3410 zero_filled=0x0
+[ARGUS-LOADER] stage=elf-load segment=2 result=COPIED dst=0x10034f8 from_file=0x44f8 zero_filled=0x0
+[ARGUS-LOADER] stage=elf-load segment=3 result=COPIED dst=0x1003580 from_file=0x4580 zero_filled=0x4008
+[ARGUS-LOADER] stage=bootinfo field=memory_map count=127 capacity=192 desc_size=48 map_key=0xb0c
+[ARGUS-LOADER] stage=bootinfo field=acpi present=1 rsdp=0x7b7e014 revision=2 checksum=0x00
+[ARGUS-LOADER] stage=bootinfo field=framebuffer phys=0x80000000 width=1280 height=800 stride=1280 format=BGRx8 size=0x3e8000
+[ARGUS-LOADER] stage=bootinfo field=initrd phys=0x6199000 len=0x1000
+[ARGUS-LOADER] stage=bootinfo field=kernel_phys start=0x1000000 len=0x75d0 phnum=6
+[ARGUS-LOADER] stage=bootinfo field=loader_reserved count=5
+[ARGUS-LOADER] stage=bootinfo field=boot_slot value=0 boot_reason=cold_boot
+[ARGUS-LOADER] stage=bootinfo field=debug_serial port=0x3f8 baud=115200 present=1
+[ARGUS-LOADER] stage=exit-boot-services event=attempt n=1 map_key=0xb0c
+[ARGUS-LOADER] stage=exit-boot-services event=attempt n=2 map_key=0xb10
+[ARGUS-LOADER] stage=exit-boot-services result=EFI_SUCCESS status=0x0 map_key=0xb10
+[ARGUS-LOADER] stage=bootinfo event=sealed address=0x618e000 magic=0x4152475553000001 abi_version=1 abi_size=7040 checksum=0xc023b1a3 flags=0x1c
+[ARGUS-LOADER] stage=handoff event=jump entry=0x1000000 bootinfo=0x618e000 abi=sysv-x86_64 arg0=rdi checksum=0xc023b1a3
+[ARGUS-KERNEL] stage=entry event=start name=ARGUS kernel=x86_64 version=0.2.0 abi_version=1 uart_present=1
+[ARGUS-KERNEL] stage=entry event=running rip_is_kernel_text=1 identity_mapped=1
+[ARGUS-KERNEL] stage=entry event=banner "ARGUS kernel is alive"
+[ARGUS-KERNEL] stage=bootinfo event=received address=0x618e000 magic=0x4152475553000001 abi_version=1 abi_size=7040
+[ARGUS-KERNEL] stage=bootinfo event=checksum_ok carried=0xc023b1a3 computed=0xc023b1a3 covered_bytes=7040
+[ARGUS-KERNEL] stage=bootinfo field=magic value=0x4152475553000001
+[ARGUS-KERNEL] stage=bootinfo field=abi_version value=1
+[ARGUS-KERNEL] stage=bootinfo field=abi_size value=7040
+[ARGUS-KERNEL] stage=bootinfo field=flags value=0x1c memmap_clamped=0 reserved_clamped=0 framebuffer=1 acpi=1 initrd=1 test_corrupted=0
+[ARGUS-KERNEL] stage=bootinfo field=checksum value=0xc023b1a3 verified=1
+[ARGUS-KERNEL] stage=bootinfo field=boot_tsc value=0x1dcd47e6c
+[ARGUS-KERNEL] stage=bootinfo field=kernel_entry value=0x1000000
+[ARGUS-KERNEL] stage=bootinfo field=kernel_image_bytes value=0x35b9
+[ARGUS-KERNEL] stage=bootinfo field=segment_count value=4 kernel_phnum=6
+[ARGUS-KERNEL] stage=bootinfo field=kernel_phys start=0x1000000 len=0x75d0 end=0x10075d0 phnum=6
+[ARGUS-KERNEL] stage=bootinfo field=segments[0] vaddr=0x1000000 paddr=0x1000000 filesz=0x240f memsz=0x240f flags=0x5
+[ARGUS-KERNEL] stage=bootinfo field=segments[1] vaddr=0x1002410 paddr=0x1002410 filesz=0x10e2 memsz=0x10e2 flags=0x4
+[ARGUS-KERNEL] stage=bootinfo field=segments[2] vaddr=0x10034f8 paddr=0x10034f8 filesz=0x80 memsz=0x80 flags=0x6
+[ARGUS-KERNEL] stage=bootinfo field=segments[3] vaddr=0x1003580 paddr=0x1003580 filesz=0x48 memsz=0x4050 flags=0x6
+[ARGUS-KERNEL] stage=bootinfo field=memory_map_meta count=127 capacity=192 desc_size=48 desc_version=0x1 map_key=0xb10
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[0] type=3 name=BootServicesCode start=0x0 len=0x1000 end=0x1000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[1] type=7 name=ConventionalMemory start=0x1000 len=0x9f000 end=0xa0000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[2] type=7 name=ConventionalMemory start=0x100000 len=0x700000 end=0x800000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[3] type=10 name=ACPIMemoryNVS start=0x800000 len=0x8000 end=0x808000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[4] type=7 name=ConventionalMemory start=0x808000 len=0x3000 end=0x80b000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[5] type=10 name=ACPIMemoryNVS start=0x80b000 len=0x1000 end=0x80c000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[6] type=7 name=ConventionalMemory start=0x80c000 len=0x4000 end=0x810000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[7] type=10 name=ACPIMemoryNVS start=0x810000 len=0xf0000 end=0x900000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[8] type=4 name=BootServicesData start=0x900000 len=0xe80000 end=0x1780000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[9] type=7 name=ConventionalMemory start=0x1780000 len=0x27f5000 end=0x3f75000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[10] type=4 name=BootServicesData start=0x3f75000 len=0x20000 end=0x3f95000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[11] type=7 name=ConventionalMemory start=0x3f95000 len=0x21dc000 end=0x6171000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[12] type=2 name=LoaderData start=0x6171000 len=0x11000 end=0x6182000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[13] type=1 name=LoaderCode start=0x6182000 len=0x10000 end=0x6192000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[14] type=7 name=ConventionalMemory start=0x6192000 len=0x9000 end=0x619b000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[15] type=4 name=BootServicesData start=0x619b000 len=0x7f3000 end=0x698e000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[16] type=3 name=BootServicesCode start=0x698e000 len=0xb4000 end=0x6a42000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[17] type=4 name=BootServicesData start=0x6a42000 len=0x30000 end=0x6a72000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[18] type=3 name=BootServicesCode start=0x6a72000 len=0xe1000 end=0x6b53000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[19] type=4 name=BootServicesData start=0x6b53000 len=0x65000 end=0x6bb8000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[20] type=3 name=BootServicesCode start=0x6bb8000 len=0x9000 end=0x6bc1000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[21] type=4 name=BootServicesData start=0x6bc1000 len=0x5000 end=0x6bc6000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[22] type=3 name=BootServicesCode start=0x6bc6000 len=0x20000 end=0x6be6000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[23] type=4 name=BootServicesData start=0x6be6000 len=0x2000 end=0x6be8000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[24] type=3 name=BootServicesCode start=0x6be8000 len=0xa000 end=0x6bf2000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[25] type=4 name=BootServicesData start=0x6bf2000 len=0x1000 end=0x6bf3000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[26] type=3 name=BootServicesCode start=0x6bf3000 len=0x8000 end=0x6bfb000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[27] type=4 name=BootServicesData start=0x6bfb000 len=0x1000 end=0x6bfc000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[28] type=3 name=BootServicesCode start=0x6bfc000 len=0x10000 end=0x6c0c000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[29] type=4 name=BootServicesData start=0x6c0c000 len=0x3000 end=0x6c0f000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[30] type=3 name=BootServicesCode start=0x6c0f000 len=0x3000 end=0x6c12000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[31] type=4 name=BootServicesData start=0x6c12000 len=0x7000 end=0x6c19000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[32] type=3 name=BootServicesCode start=0x6c19000 len=0x12000 end=0x6c2b000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[33] type=4 name=BootServicesData start=0x6c2b000 len=0x9000 end=0x6c34000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[34] type=3 name=BootServicesCode start=0x6c34000 len=0xe000 end=0x6c42000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[35] type=4 name=BootServicesData start=0x6c42000 len=0xf000 end=0x6c51000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[36] type=3 name=BootServicesCode start=0x6c51000 len=0xb000 end=0x6c5c000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[37] type=4 name=BootServicesData start=0x6c5c000 len=0xb000 end=0x6c67000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[38] type=3 name=BootServicesCode start=0x6c67000 len=0x16000 end=0x6c7d000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[39] type=4 name=BootServicesData start=0x6c7d000 len=0x9000 end=0x6c86000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[40] type=3 name=BootServicesCode start=0x6c86000 len=0x24000 end=0x6caa000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[41] type=4 name=BootServicesData start=0x6caa000 len=0x3000 end=0x6cad000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[42] type=3 name=BootServicesCode start=0x6cad000 len=0x14000 end=0x6cc1000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[43] type=4 name=BootServicesData start=0x6cc1000 len=0x7000 end=0x6cc8000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[44] type=3 name=BootServicesCode start=0x6cc8000 len=0x19000 end=0x6ce1000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[45] type=4 name=BootServicesData start=0x6ce1000 len=0x3000 end=0x6ce4000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[46] type=3 name=BootServicesCode start=0x6ce4000 len=0x6000 end=0x6cea000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[47] type=4 name=BootServicesData start=0x6cea000 len=0x2000 end=0x6cec000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[48] type=3 name=BootServicesCode start=0x6cec000 len=0x13000 end=0x6cff000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[49] type=4 name=BootServicesData start=0x6cff000 len=0x5000 end=0x6d04000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[50] type=3 name=BootServicesCode start=0x6d04000 len=0x16000 end=0x6d1a000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[51] type=4 name=BootServicesData start=0x6d1a000 len=0x2000 end=0x6d1c000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[52] type=3 name=BootServicesCode start=0x6d1c000 len=0xd000 end=0x6d29000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[53] type=4 name=BootServicesData start=0x6d29000 len=0x3000 end=0x6d2c000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[54] type=3 name=BootServicesCode start=0x6d2c000 len=0x6000 end=0x6d32000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[55] type=4 name=BootServicesData start=0x6d32000 len=0x2000 end=0x6d34000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[56] type=3 name=BootServicesCode start=0x6d34000 len=0x1000 end=0x6d35000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[57] type=4 name=BootServicesData start=0x6d35000 len=0x1000 end=0x6d36000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[58] type=3 name=BootServicesCode start=0x6d36000 len=0x5000 end=0x6d3b000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[59] type=4 name=BootServicesData start=0x6d3b000 len=0x5000 end=0x6d40000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[60] type=3 name=BootServicesCode start=0x6d40000 len=0xc000 end=0x6d4c000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[61] type=4 name=BootServicesData start=0x6d4c000 len=0x2000 end=0x6d4e000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[62] type=3 name=BootServicesCode start=0x6d4e000 len=0x1d000 end=0x6d6b000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[63] type=4 name=BootServicesData start=0x6d6b000 len=0x1000 end=0x6d6c000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[64] type=3 name=BootServicesCode start=0x6d6c000 len=0xa000 end=0x6d76000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[65] type=4 name=BootServicesData start=0x6d76000 len=0x1000 end=0x6d77000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[66] type=3 name=BootServicesCode start=0x6d77000 len=0x1000 end=0x6d78000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[67] type=4 name=BootServicesData start=0x6d78000 len=0x2000 end=0x6d7a000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[68] type=3 name=BootServicesCode start=0x6d7a000 len=0x15000 end=0x6d8f000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[69] type=4 name=BootServicesData start=0x6d8f000 len=0x3000 end=0x6d92000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[70] type=3 name=BootServicesCode start=0x6d92000 len=0x2000 end=0x6d94000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[71] type=4 name=BootServicesData start=0x6d94000 len=0x2000 end=0x6d96000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[72] type=3 name=BootServicesCode start=0x6d96000 len=0x7000 end=0x6d9d000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[73] type=4 name=BootServicesData start=0x6d9d000 len=0x8000 end=0x6da5000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[74] type=3 name=BootServicesCode start=0x6da5000 len=0x4000 end=0x6da9000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[75] type=4 name=BootServicesData start=0x6da9000 len=0x6000 end=0x6daf000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[76] type=3 name=BootServicesCode start=0x6daf000 len=0x1000 end=0x6db0000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[77] type=4 name=BootServicesData start=0x6db0000 len=0x1000 end=0x6db1000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[78] type=3 name=BootServicesCode start=0x6db1000 len=0x3e000 end=0x6def000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[79] type=4 name=BootServicesData start=0x6def000 len=0x3000 end=0x6df2000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[80] type=3 name=BootServicesCode start=0x6df2000 len=0x4000 end=0x6df6000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[81] type=4 name=BootServicesData start=0x6df6000 len=0x7000 end=0x6dfd000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[82] type=3 name=BootServicesCode start=0x6dfd000 len=0x3000 end=0x6e00000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[83] type=4 name=BootServicesData start=0x6e00000 len=0x201000 end=0x7001000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[84] type=3 name=BootServicesCode start=0x7001000 len=0x8000 end=0x7009000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[85] type=4 name=BootServicesData start=0x7009000 len=0x5000 end=0x700e000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[86] type=6 name=RuntimeServicesData start=0x700e000 len=0xc1000 end=0x70cf000 uefi_attribs=0x800000000000000f
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[87] type=3 name=BootServicesCode start=0x70cf000 len=0x15000 end=0x70e4000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[88] type=4 name=BootServicesData start=0x70e4000 len=0x2000 end=0x70e6000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[89] type=3 name=BootServicesCode start=0x70e6000 len=0x4000 end=0x70ea000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[90] type=4 name=BootServicesData start=0x70ea000 len=0x2000 end=0x70ec000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[91] type=3 name=BootServicesCode start=0x70ec000 len=0x8000 end=0x70f4000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[92] type=4 name=BootServicesData start=0x70f4000 len=0x1000 end=0x70f5000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[93] type=3 name=BootServicesCode start=0x70f5000 len=0x1000 end=0x70f6000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[94] type=4 name=BootServicesData start=0x70f6000 len=0x1000 end=0x70f7000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[95] type=3 name=BootServicesCode start=0x70f7000 len=0x1000 end=0x70f8000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[96] type=4 name=BootServicesData start=0x70f8000 len=0x1000 end=0x70f9000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[97] type=3 name=BootServicesCode start=0x70f9000 len=0x3000 end=0x70fc000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[98] type=4 name=BootServicesData start=0x70fc000 len=0x2000 end=0x70fe000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[99] type=3 name=BootServicesCode start=0x70fe000 len=0x17000 end=0x7115000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[100] type=4 name=BootServicesData start=0x7115000 len=0x2000 end=0x7117000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[101] type=3 name=BootServicesCode start=0x7117000 len=0x2000 end=0x7119000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[102] type=4 name=BootServicesData start=0x7119000 len=0x412000 end=0x752b000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[103] type=3 name=BootServicesCode start=0x752b000 len=0x4000 end=0x752f000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[104] type=4 name=BootServicesData start=0x752f000 len=0x2000 end=0x7531000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[105] type=3 name=BootServicesCode start=0x7531000 len=0x6000 end=0x7537000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[106] type=4 name=BootServicesData start=0x7537000 len=0x6000 end=0x753d000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[107] type=3 name=BootServicesCode start=0x753d000 len=0xa000 end=0x7547000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[108] type=4 name=BootServicesData start=0x7547000 len=0x1000 end=0x7548000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[109] type=3 name=BootServicesCode start=0x7548000 len=0x5000 end=0x754d000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[110] type=4 name=BootServicesData start=0x754d000 len=0x3a0000 end=0x78ed000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[111] type=6 name=RuntimeServicesData start=0x78ed000 len=0x100000 end=0x79ed000 uefi_attribs=0x800000000000000f
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[112] type=5 name=RuntimeServicesCode start=0x79ed000 len=0x100000 end=0x7aed000 uefi_attribs=0x800000000000000f
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[113] type=0 name=Reserved start=0x7aed000 len=0x80000 end=0x7b6d000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[114] type=9 name=ACPIReclaimMemory start=0x7b6d000 len=0x12000 end=0x7b7f000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[115] type=10 name=ACPIMemoryNVS start=0x7b7f000 len=0x80000 end=0x7bff000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[116] type=4 name=BootServicesData start=0x7bff000 len=0x201000 end=0x7e00000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[117] type=7 name=ConventionalMemory start=0x7e00000 len=0x77000 end=0x7e77000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[118] type=4 name=BootServicesData start=0x7e77000 len=0x20000 end=0x7e97000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[119] type=3 name=BootServicesCode start=0x7e97000 len=0x33000 end=0x7eca000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[120] type=4 name=BootServicesData start=0x7eca000 len=0x11000 end=0x7edb000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[121] type=3 name=BootServicesCode start=0x7edb000 len=0x19000 end=0x7ef4000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[122] type=6 name=RuntimeServicesData start=0x7ef4000 len=0x84000 end=0x7f78000 uefi_attribs=0x800000000000000f
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[123] type=10 name=ACPIMemoryNVS start=0x7f78000 len=0x88000 end=0x8000000 uefi_attribs=0xf
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[124] type=0 name=Reserved start=0xe0000000 len=0x10000000 end=0xf0000000 uefi_attribs=0x1
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[125] type=11 name=MemoryMappedIO start=0xffc00000 len=0x400000 end=0x100000000 uefi_attribs=0x8000000000000001
+[ARGUS-KERNEL] stage=bootinfo field=memory_regions[126] type=0 name=Reserved start=0xfd00000000 len=0x300000000 end=0x10000000000 uefi_attribs=0x0
+[ARGUS-KERNEL] stage=bootinfo event=summary regions=127 usable_bytes=0x79c8000
+[ARGUS-KERNEL] stage=bootinfo field=acpi present=1 rsdp_phys=0x7b7e014 rsdp_checksum=0x00 revision=2
+[ARGUS-KERNEL] stage=bootinfo event=acpi_readback signature="RSD PTR" match=1
+[ARGUS-KERNEL] stage=bootinfo field=framebuffer present=1 phys=0x80000000 width=1280 height=800 stride=1280 pixel_format=1 name=BGRx8 size_bytes=0x3e8000
+[ARGUS-KERNEL] stage=bootinfo field=initrd phys=0x6199000 len=0x1000
+[ARGUS-KERNEL] stage=bootinfo event=initrd_readback magic_match=1 expected=ARGUSIRD
+[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[0] kind=4 name=memmap_buffer start=0x6171018 len=0x10000 end=0x6181018
+[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[1] kind=1 name=loader_image start=0x6182000 len=0x10000 end=0x6192000
+[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[2] kind=2 name=bootinfo start=0x618e000 len=0x1b80 end=0x618fb80
+[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[3] kind=3 name=jump_stack start=0x618c000 len=0x2000 end=0x618e000
+[ARGUS-KERNEL] stage=bootinfo field=loader_reserved[4] kind=5 name=kernel_file_buffer start=0x60aa018 len=0xc6778 end=0x6170790
+[ARGUS-KERNEL] stage=bootinfo field=loader_reserved_count value=5 capacity=16
+[ARGUS-KERNEL] stage=bootinfo field=boot_slot value=0 boot_reason=1 boot_reason_name=cold_boot
+[ARGUS-KERNEL] stage=bootinfo field=debug_serial base_port=0x3f8 baud=115200 present=1
+[ARGUS-KERNEL] stage=bootinfo field=system_table value=0x79ec018
+[ARGUS-KERNEL] stage=bootinfo event=placement _start=0x1000000 first_segment_paddr=0x1000000 kernel_phys_start=0x1000000 match=1
+[ARGUS-KERNEL] stage=halt event=ready state=loop_hlt
+[ARGUS-KERNEL] stage=halt event=boot_proven kernel_banner=1 bootinfo_dumped=1 bootinfo_checksum=ok abi_version=1
+qemu-system-x86_64: terminating on signal 15 from pid 16073 (timeout)
+
+[1m[run][0m timing:
+      build_seconds=0.66
+      qemu_to_loader_banner_ms=3000
+      qemu_to_exit_boot_services_ms=3286
+      qemu_to_handoff_ms=3288
+      qemu_to_kernel_banner_ms=3298
+      qemu_to_kernel_halt_ms=3548
+      drive_interface=ide
+      firmware=/usr/share/OVMF/OVMF_CODE_4M.fd
+      run_utc=2026-11-08T21:22:20Z
+
+[1;32m[run] PASS:[0m loader handed control to the kernel; the kernel printed its banner,
+      verified the BootInfo checksum and reached its halt marker.
+      Serial log: /home/team/shared/argus/artifacts/firmware-matrix/plain-ide.log

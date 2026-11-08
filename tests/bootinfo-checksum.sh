@@ -51,5 +51,6 @@ expect_contains "$log" "stage=halt event=refused reason=E_BOOTINFO_CHECKSUM" "ke
 expect_absent   "$log" "stage=halt event=boot_proven" "no boot_proven marker"
 expect_absent   "$log" "field=memory_map_meta" "kernel stopped before dumping fields"
 show_evidence "$log" "checksum|REFUSED|refused|test_corruption" "bootinfo-checksum"
+drop_image "$WORK"
 
 summary "bootinfo-checksum"

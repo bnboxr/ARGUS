@@ -42,6 +42,7 @@ expect_contains "$log" "stage=elf-validate result=REJECT" "not-an-elf"
 expect_absent   "$log" "stage=handoff event=jump" "not-an-elf no handoff"
 show_evidence "$log" "elf-validate|REFUSED" "not-an-elf"
 printf '      run.sh exit status: %s\n' "$rc"
+drop_image "$dir"
 
 # --- 2. kernel file absent --------------------------------------------------
 dir="$WORK/kernel-absent"
@@ -56,5 +57,6 @@ expect_contains "$log" "stage=kernel-read event=fail" "kernel-absent"
 expect_absent   "$log" "[ARGUS-KERNEL] stage=entry event=banner" "kernel-absent no banner"
 show_evidence "$log" "kernel-read event=fail|no_volume" "kernel-absent"
 printf '      run.sh exit status: %s\n' "$rc"
+drop_image "$dir"
 
 summary "break-kernel"

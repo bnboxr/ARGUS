@@ -31,8 +31,8 @@ TABLE="$ROOT/artifacts/firmware-matrix.txt"
 
 printf '\033[1m[firmware-matrix] %s\033[0m\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-row() { # <label> <drive-if> <code> <vars> <kernel>
-    local label="$1" dif="$2" code="$3" vars="$4" kernel="$5"
+row() { # <label> <drive-if> <code> <vars>
+    local label="$1" dif="$2" code="$3" vars="$4"
     local log="$WORK/$label.log"
     local rc
     ARGUS_LOG="$log" \
@@ -43,11 +43,14 @@ row() { # <label> <drive-if> <code> <vars> <kernel>
     "$ROOT/run.sh" > "$WORK/$label.stdout" 2>&1
     rc=$?
 
-    local sfs loader
+    local sfs loader kernel
     if grep -q "route=loaded_image_device_handle.*found=1" "$log" 2>/dev/null; then
         sfs=yes; else sfs=no; fi
     if grep -q "stage=banner event=start" "$log" 2>/dev/null; then
         loader=yes; else loader=no; fi
+    # "kernel" is the verdict, not a guess: the kernel's own halt marker.
+    if grep -q "stage=halt event=boot_proven" "$log" 2>/dev/null; then
+        kernel=yes; else kernel=no; fi
 
     printf '%-28s %-8s %-24s %-4s %-6s %-7s exit=%s\n' \
         "$label" "$dif" "$(basename "$code")" "$sfs" "$loader" "$kernel" "$rc" >> "$TABLE"
@@ -66,12 +69,20 @@ PLAIN_VARS=/usr/share/OVMF/OVMF_VARS_4M.fd
 SECBOOT=/usr/share/OVMF/OVMF_CODE_4M.ms.fd
 SECBOOT_VARS=/usr/share/OVMF/OVMF_VARS_4M.ms.fd
 
-for dif in virtio ide sata nvme; do
-    row "plain-$dif" "$dif" "$PLAIN" "$PLAIN_VARS" "?"
+for dif in virtio ide nvme; do
+    row "plain-$dif" "$dif" "$PLAIN" "$PLAIN_VARS"
 done
 
+# `if=sata` is not a QEMU bus type (QEMU 8.2 rejects it outright: "unsupported
+# bus type 'sata'"), so it says nothing about firmware support. AHCI needs an
+# explicit controller (-device ahci + ide-hd on its bus). Recorded as not run
+# rather than guessed at.
+printf '  %-28s %-8s %-24s %-3s %-3s %-3s %s\n' "plain-sata" "n/a" "-" "-" "-" "-" "not-run: QEMU has no if=sata"
+printf '%-28s %-8s %-24s %-4s %-6s %-7s %s\n' \
+    "plain-sata" "n/a" "-" "-" "-" "-" "not-run: QEMU has no if=sata" >> "$TABLE"
+
 if [ -f "$SECBOOT" ] && [ -f "$SECBOOT_VARS" ]; then
-    row "secureboot-virtio" virtio "$SECBOOT" "$SECBOOT_VARS" "?"
+    row "secureboot-virtio" virtio "$SECBOOT" "$SECBOOT_VARS"
 fi
 
 printf '\n[firmware-matrix] table: %s\n' "$TABLE"
@@ -79,7 +90,7 @@ printf '[firmware-matrix] logs:  %s/\n' "$WORK"
 
 # The assertion this test exists for: on the firmware we ship against, the
 # canonical route must find the volume on every block interface OVMF supports.
-if grep -q "^plain-virtio .*yes yes" "$TABLE"; then
+if awk '$1=="plain-virtio" && $4=="yes" && $6=="yes" {found=1} END {exit !found}' "$TABLE"; then
     pass "virtio: SimpleFileSystem found via LoadedImage->DeviceHandle"
 else
     fail "virtio: SimpleFileSystem NOT found"
@@ -88,7 +99,7 @@ fi
 # Secure Boot: an unsigned loader is expected to be refused. That is not a
 # failure of this test, it is the documented state until slice 2 signs images.
 if grep -q "^secureboot-virtio" "$TABLE"; then
-    if grep -q "^secureboot-virtio .*no no" "$TABLE"; then
+    if awk '$1=="secureboot-virtio" && $5=="no" {found=1} END {exit !found}' "$TABLE"; then
         printf '  note: secure-boot firmware refused the unsigned loader, as expected\n'
         printf '        (signing and key enrolment are Phase I slice 2)\n'
     fi
