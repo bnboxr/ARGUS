@@ -214,3 +214,64 @@ learned the hard way in this milestone.
 * Renderer, Boot Manager UI, cinematic boot animation (slice 4).
 * Real-hardware boot on the owner's PC. Everything above is QEMU + OVMF.
 * AHCI/SATA coverage, and whatever makes OVMF's BDS accept the NVMe device.
+
+## Phase I slice 2a — the signed boot manifest
+
+The loader now refuses to load anything before it has verified a signed manifest.
+
+**The flow, in order** (`bootloader/src/security.rs`):
+
+1. find the boot volume; no volume means no manifest, which means no boot
+2. read `\ARGUS\ARGUS.MF` (473 bytes, little-endian, `ARGUS.MF` magic)
+3. check `key_id` against the key compiled into the loader
+4. verify the RSA-2048 PKCS#1 v1.5 / SHA-256 signature over `payload_digest`
+5. check `min_loader_version` against the loader's own, and `slot` against the
+   slot actually booting
+6. read `\ARGUS\FLOOR` and `\ARGUS\CONFIRM`; refuse if `security_version` is
+   below either
+7. read the boot config and check `config_digest`
+8. read the kernel and check `kernel_digest` — the digest **inside the signed
+   manifest** is authoritative; there is no detached signature
+9. check `initrd_digest`
+10. write `\ARGUS\CONFIRM`, and raise `\ARGUS\FLOOR` if the previous boot's
+    confirmation allows it
+11. `ExitBootServices` and handoff
+
+Each refusal has a named code and its own serial line, and `run.sh` exits
+non-zero on any of them: `E_MANIFEST_ABSENT`, `E_MANIFEST_MAGIC`,
+`E_MANIFEST_FORMAT`, `E_MANIFEST_DIGEST`, `E_KEY_UNKNOWN`, `E_SIG_INVALID`,
+`E_LOADER_TOO_OLD`, `E_SLOT_MISMATCH`, `E_MANIFEST_ROLLBACK`,
+`E_FLOOR_CORRUPT`, `E_CONFIG_LEN`, `E_CONFIG_DIGEST`, `E_KERNEL_UNREADABLE`,
+`E_KERNEL_LEN`, `E_KERNEL_DIGEST`, `E_INITRD_DIGEST`.
+
+**The key is a test key.** See `keys/test/README.md`. It is committed with its
+private half. A boot proven with it proves the mechanism, not the security.
+
+**The floor is a placeholder, and it is not tamper-proof.** `\ARGUS\FLOOR` is a
+4096-byte file on the ESP with two CRC-32-protected copies at offsets 0 and 2048;
+the second copy is written first so a power cut leaves the older value readable.
+CRC-32 detects corruption, **not** an attacker: anyone who can write the disk can
+rewrite both copies and the CRC. This belongs in a TPM NV counter with an
+auth policy, and moves there when measured boot lands. Until then the honest
+claim is: *the floor stops an accidental or naive downgrade, not a determined
+one.*
+
+**The one-boot window.** The floor rises only after a manifest has booted and the
+machine came back up to boot again — never at install time, never before
+handoff. So between the first boot of a new version and the next boot, an
+attacker with disk access can still present the previous version. That is the
+same window `boot-trust-model-v1.md` §4 accepts, for the same reason: raising the
+floor before the handoff risks a false floor on a machine that never booted.
+
+**Build and verification.** `./build.sh` writes the FAT volume, reads every file
+back out of it and compares byte for byte, composes the MBR disk image, extracts
+the partition and compares it against the volume that was written, then reads the
+files out of the extracted partition. `./build.sh --check` runs the same
+verification on an existing `dist/argus-disk.img` without building. Concurrent
+builds are serialised with `flock`, because two builds writing `dist/` at once is
+what made this script flaky.
+
+**`run.sh` boots whatever is in `dist/` and does not rebuild it.** If a build
+failed, the previous image is still there and `run.sh` will boot it and exit 0 —
+correctly for the image it was given, misleadingly for the change you just made.
+Always `./build.sh && ./run.sh`, and check build.sh's exit status first.
