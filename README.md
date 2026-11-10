@@ -148,6 +148,48 @@ From `artifacts/timing.txt`, wall clock on this machine, not estimates:
 Almost all of the boot time is OVMF itself; our loader accounts for roughly
 200 ms of it.
 
+## What you see on screen
+
+The loader draws the same story it writes to COM1, because the owner's laptop
+has no serial port. Nothing here is a boot manager or a visual identity yet —
+it is diagnostic text on the framebuffer, and the visual language is a later
+slice with its own contract.
+
+The screen has three fixed bands, and no band can be drawn into by another:
+
+- **Header, fixed at the top.** `ARGUS v0.1 phase-I` on the left and the live
+  mode on the right (`1920x1080  120x33 cells  scale 2`), with a rule under
+  both. The stage list scrolls *below* this band, so the header stays put
+  however long the list gets.
+- **Stage list, scrolling.** One line per completed step, in the order the
+  loader does them:
+  1. volume found — the ESP mounted, `\ARGUS\ARGUS.MF` being read
+  2. manifest parsed — slot, security version, manifest version
+  3. signature valid — RSA-2048 PKCS#1 v1.5, SHA-256
+  4. floor value — the anti-rollback floor read and compared
+  5. kernel digest — SHA-256 of the kernel, truncated, and its length
+  6. ELF validation — segment count and entry point
+  7. `ExitBootServices` — firmware released, map key
+  8. handoff — the address the kernel was jumped to, and the BootInfo pointer
+- **Kernel block, fixed at the bottom.** A rule, `ARGUS kernel is alive` at 2x,
+  then `BootInfo checksum verified, halted in hlt` and `serial log: COM1
+  115200`. These rows are reserved before the stage list starts, so the two can
+  never overlap at any resolution.
+
+A refused boot clears the lower half of the screen and prints `BOOT REFUSED`
+with the named code (e.g. `E_MANIFEST_ABSENT`) large and centred, leaving the
+stage list above it visible: the code says *what*, the lines above say *where*.
+
+`tests/screens.sh` captures all three states as PNGs in `artifacts/screens/`.
+The resolution in each file name is the one the loader reported on serial for
+that boot, and the test fails if the PNG header disagrees with it.
+
+**Secure Boot must be off for this build.** The loader is not signed with a key
+the firmware trusts, so with Secure Boot enabled the firmware refuses to start
+it and nothing is drawn at all. The trust chain inside the loader (manifest
+signature, anti-rollback floor, kernel digest) is a separate thing and is
+checked regardless; measured boot and a signed loader are later slices.
+
 ## Tests
 
 | test | what it proves |

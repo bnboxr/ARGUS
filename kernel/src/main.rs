@@ -444,11 +444,15 @@ pub extern "C" fn kmain(bootinfo: *const BootInfo) -> ! {
                 "[ARGUS-KERNEL] stage=screen result=READY width={} height={} stride={}",
                 bi.framebuffer.width, bi.framebuffer.height, bi.framebuffer.stride
             );
-            // The line the owner asked to see: written by the kernel, below the
-            // loader's stage log, in the colour that means "this is real".
-            screen::alive("ARGUS kernel is alive");
-            screen::note("BootInfo checksum verified, halted in hlt", RGB_DIM);
-            screen::note("serial log: COM1 115200", RGB_OK);
+            // The block the owner asked to see: written by the kernel, below the
+            // loader's stage list, in the rows the loader left free for it.
+            screen::alive(
+                "ARGUS kernel is alive",
+                &[
+                    ("BootInfo checksum verified, halted in hlt", RGB_DIM),
+                    ("serial log: COM1 115200", RGB_OK),
+                ],
+            );
         }
         Err(reason) => {
             let _ = writeln!(

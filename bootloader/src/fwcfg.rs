@@ -20,9 +20,10 @@
 //! `None` — the loader then uses its normal preference order.
 //!
 //! Reference: QEMU `docs/specs/fw_cfg.txt` — selector is a big-endian u16
-//! written to 0x510, data is read one byte at a time from 0x511, and the file
-//! directory is built from three parallel arrays selected by 0x0002/0x0003/
-//! 0x0004 with a 0x0001 count at the front.
+//! written to 0x510, data is read one byte at a time from 0x511. Selector 0x0000
+//! is the `"QEMU"` signature and selector 0x0001 is the file directory: a u32
+//! count followed by that many 64-byte entries, read sequentially from the same
+//! selector.
 
 use core::arch::asm;
 
@@ -33,14 +34,12 @@ const IO_DATA: u16 = 0x511;
 
 /// `FW_CFG_SIGNATURE`: the four bytes `"QEMU"` as a big-endian u32.
 const SIGNATURE: u32 = 0x5145_4D55;
-/// `FW_CFG_FILE_DIR`: number of directory entries.
-const SEL_COUNT: u16 = 0x0001;
-/// `FW_CFG_FILE_DIR` entry `select` array.
-const SEL_FILE_SELECT: u16 = 0x0002;
-/// `FW_CFG_FILE_DIR` entry `size` array.
-const SEL_FILE_SIZE: u16 = 0x0003;
-/// `FW_CFG_FILE_DIR` entry `name` array (56 bytes each).
-const SEL_FILE_NAME: u16 = 0x0004;
+/// `FW_CFG_FILE_DIR`: the directory blob — a u32 count followed by that many
+/// 64-byte entries, all read sequentially from this one selector.
+///
+/// `0x0019`, not `0x0001`: selector 1 is `FW_CFG_ID`, the interface version,
+/// and reading it returns a small integer that parses as "no files at all".
+const SEL_FILE_DIR: u16 = 0x0019;
 /// Length of one directory name field, including the NUL.
 const NAME_LEN: usize = 56;
 
@@ -80,11 +79,13 @@ unsafe fn inb(port: u16) -> u8 {
 /// Privileged I/O; the port is a constant and the value is a selector the
 /// caller already validated against the directory.
 unsafe fn select(selector: u16) {
-    // The selector is big-endian on the wire while `out dx, ax` writes it
-    // little-endian, so it has to be byte-swapped here. Getting this wrong
-    // reads entry 0x0100 instead of 0x0001 and the directory never matches.
+    // No byte swap here. The selector is big-endian *on the bus*, and `outw`
+    // already puts the high byte at 0x510 and the low byte at 0x511, which is
+    // exactly what the firmware expects to read back. Swapping first selects
+    // 0x1900 instead of 0x0019 and every read after the first returns zero —
+    // which looks like "this machine has no fw_cfg files", not like a bug.
     // SAFETY: see above.
-    unsafe { outw(IO_SELECTOR, selector.swap_bytes()) };
+    unsafe { outw(IO_SELECTOR, selector) };
 }
 
 /// Read one byte of the selected entry.
@@ -130,19 +131,22 @@ pub fn screen_hint() -> Option<ModeHint> {
         if read_be32() != SIGNATURE {
             return None;
         }
-        select(SEL_COUNT);
+        select(SEL_FILE_DIR);
         let count = read_be32();
         if count == 0 || count > 256 {
             return None;
         }
 
+        // The directory is one blob: after the count, each entry is
+        // `u32 size; u16 select; u16 reserved; char name[56]`, read back to back
+        // from the same selector. Re-selecting between entries would restart at
+        // the count and read the first entry forever.
         let mut name = [0u8; NAME_LEN];
-        for index in 0..count {
-            select(SEL_FILE_SELECT + (index as u16) * 4);
-            let file_selector = read_be32() as u16;
-            select(SEL_FILE_SIZE + (index as u16) * 4);
+        for _ in 0..count {
             let size = read_be32() as usize;
-            select(SEL_FILE_NAME + (index as u16) * 4);
+            // `select` and `reserved` arrive together; the selector is the high
+            // half of the big-endian word.
+            let file_selector = (read_be32() >> 16) as u16;
             for byte in name.iter_mut() {
                 *byte = read_u8();
             }
@@ -166,24 +170,29 @@ fn parse_mode(bytes: &[u8]) -> Option<ModeHint> {
     let mut width = 0u32;
     let mut height = 0u32;
     let mut seen_x = false;
-    let mut digits = 0;
+    // Digits in the number being read, not in the whole string: "640x480" is
+    // three digits on each side, and a shared counter rejects it as too long.
+    let mut digits = 0u32;
     for &b in bytes {
         match b {
             b'0'..=b'9' => {
                 let d = (b - b'0') as u32;
+                digits += 1;
+                if digits > 5 {
+                    return None;
+                }
                 if seen_x {
                     height = height.checked_mul(10)?.checked_add(d)?;
                 } else {
                     width = width.checked_mul(10)?.checked_add(d)?;
                 }
-                digits += 1;
             }
-            b'x' | b'X' if !seen_x && digits > 0 => seen_x = true,
+            b'x' | b'X' if !seen_x && digits > 0 => {
+                seen_x = true;
+                digits = 0;
+            }
             b'\n' | b'\r' | b'\0' | b' ' => break,
             _ => return None,
-        }
-        if digits > 5 {
-            return None;
         }
     }
     if !seen_x || width == 0 || height == 0 {

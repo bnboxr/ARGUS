@@ -18,6 +18,17 @@ use crate::fbcon::{
 /// The screen, once we have one.
 static mut CONSOLE: Option<Console> = None;
 
+/// Rows at the top of the screen that belong to the header: the name line, the
+/// mode line beside it, and the rule under both. The stage list scrolls below
+/// this band and never through it, so the header stays put however long the
+/// list gets.
+pub const HEADER_ROWS: u32 = 3;
+
+/// Rows at the bottom reserved for the kernel's block: a rule, a two-row banner
+/// at 2x, and two notes. The loader stops its stage list above this band, so
+/// nothing the kernel draws can land on a loader line or the other way round.
+pub const FOOTER_ROWS: u32 = 5;
+
 /// Access the console, if the firmware gave us one.
 ///
 /// # Safety
@@ -67,7 +78,11 @@ pub fn header() {
         c.draw_text(right, top, mode.as_str(), RGB_DIM, scale);
 
         c.rule(top + 20 * scale, RGB_ACCENT);
-        c.set_cursor(0, 3);
+        // Everything above `HEADER_ROWS` is now fixed, and everything from
+        // `rows - FOOTER_ROWS` down belongs to the kernel. The stage list gets
+        // the band in between and scrolls inside it.
+        c.set_scroll_region(HEADER_ROWS, rows.saturating_sub(FOOTER_ROWS));
+        c.set_cursor(0, HEADER_ROWS);
     });
 }
 
@@ -104,17 +119,36 @@ pub fn note(text: &str, rgb: u32) {
     });
 }
 
-/// Print a line in the "this really is the kernel" colour, large, at the bottom
-/// of the screen — below whatever the loader wrote, never over it.
-pub fn alive(text: &str) {
+/// Draw the kernel's block at the bottom of the screen: a rule, the banner at
+/// 2x, and the notes under it, in the rows [`FOOTER_ROWS`] reserved for it.
+///
+/// The block is positioned from the bottom and drawn with absolute pixel
+/// coordinates, never through the cursor, so it cannot scroll and cannot be
+/// scrolled onto: the loader stopped its stage list above this band, and the
+/// band is cleared first so nothing behind the glyphs shows through.
+pub fn alive(banner: &str, notes: &[(&str, u32)]) {
     with(|c| {
         let scale = c.scale();
+        let line = 16 * scale;
+        let margin = 8 * scale;
+        let (width, _) = c.pixels();
         let (_, rows) = c.cells();
-        c.set_cursor(0, rows.saturating_sub(2));
-        c.advance_line();
-        let y = c.cursor_pixels().1;
-        c.draw_text(8 * scale, y, text, RGB_OK, scale * 2);
-        c.advance_line();
+
+        // A 2x glyph is exactly two text rows tall.
+        let banner_rows = 2;
+        let block_rows = 1 + banner_rows + notes.len() as u32;
+        let top = rows.saturating_sub(block_rows);
+        let top_px = top * line;
+
+        c.fill_rect(0, top_px, width, block_rows * line, RGB_BACKGROUND);
+        c.rule(top_px, RGB_ACCENT);
+        c.draw_text(margin, top_px + line, banner, RGB_OK, scale * 2);
+
+        let mut row = top + 1 + banner_rows;
+        for (text, rgb) in notes {
+            c.draw_text(margin, row * line, text, *rgb, scale);
+            row += 1;
+        }
     });
 }
 

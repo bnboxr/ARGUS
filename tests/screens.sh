@@ -11,7 +11,12 @@
 #
 #   boot-1920x1080.png            a successful boot: loader stages + kernel alive
 #   boot-640x480.png              the same, on a surface that only offers 640x480
-#   refusal-missing-manifest.png  \ARGUS\ARGUS.MF deleted: E_MANIFEST_ABSENT, big
+#   refusal-missing-manifest-1920x1080.png
+#                                 \ARGUS\ARGUS.MF deleted: E_MANIFEST_ABSENT, big
+#
+# The resolution in every file name is the one the loader reported on serial for
+# that boot, and the test fails if the PNG header disagrees with it. Nothing is
+# ever named after the mode the test *asked* for.
 #
 # The 640x480 case asks for the small mode through QEMU's fw_cfg
 # (`-fw_cfg name=opt/argus/screen,string=640x480`) because QEMU's default VGA
@@ -51,6 +56,9 @@ command -v "$QEMU" >/dev/null 2>&1 || die "$QEMU not found"
 [ -f "$OVMF_VARS" ] || die "OVMF vars blob not found at $OVMF_VARS"
 
 mkdir -p "$OUT" "$WORK"
+# A PNG from an older naming scheme would sit next to the honest ones and be
+# read as current evidence, so the artifacts directory starts empty of them.
+rm -f "$OUT"/boot-*.png "$OUT"/refusal-*.png
 FAILED=0
 fail() { printf '\033[1;31mFAIL\033[0m %s\n' "$*"; FAILED=1; }
 pass() { printf '\033[1;32mPASS\033[0m %s\n' "$*"; }
@@ -110,9 +118,9 @@ PY
 # Boot, wait for <marker> in the serial log, screendump through the monitor, then
 # quit QEMU. If <name>'s image was already prepared by the caller, use it as is.
 capture() {
-    local name="$1" marker="$2" expect="$3"
-    shift 3
-    local dir="$WORK/$name"
+    local case="$1" base="$2" marker="$3" want="$4"
+    shift 4
+    local dir="$WORK/$case"
     local img
     if [ -f "$dir/dist/argus-disk.img" ]; then
         mkdir -p "$dir"
@@ -124,12 +132,10 @@ capture() {
     fi
     local sock="$dir/monitor.sock"
     local log="$dir/serial.log"
-    local png="$OUT/$name.png"
-    local ppm="${png%.png}.ppm"
-    rm -f "$png" "$ppm" "$sock"
+    rm -f "$sock" "$log"
     cp "$OVMF_VARS" "$dir/vars.fd"
 
-    say "booting for $name.png (waiting for \"$marker\")"
+    say "booting $case (waiting for \"$marker\")"
     "$QEMU" \
         -machine q35 -m 128M -cpu max \
         -drive "if=pflash,format=raw,unit=0,readonly=on,file=$OVMF_CODE" \
@@ -152,12 +158,40 @@ capture() {
         waited=$((waited + 1))
     done
     if ! grep -qF "$marker" "$log" 2>/dev/null; then
-        fail "$name: marker \"$marker\" never appeared; see $log"
+        fail "$case: marker \"$marker\" never appeared; see $log"
         kill "$qpid" 2>/dev/null
         wait "$qpid" 2>/dev/null
         return 1
     fi
     sleep 0.8
+
+    # The name of the file comes from the mode the loader says it drew into, not
+    # from what the test asked for. A screenshot labelled with a resolution the
+    # image does not have is worse than no screenshot, so the label is read back
+    # out of the serial log and then checked against the PNG header below.
+    local reported stride
+    reported="$(grep -oE '^\[ARGUS-LOADER\] stage=screen result=READY width=[0-9]+ height=[0-9]+ stride=[0-9]+' "$log" \
+        | tail -1 | sed -E 's/.*width=([0-9]+) height=([0-9]+).*/\1x\2/')"
+    stride="$(grep -oE '^\[ARGUS-LOADER\] stage=screen result=READY width=[0-9]+ height=[0-9]+ stride=[0-9]+' "$log" \
+        | tail -1 | sed -E 's/.*stride=([0-9]+)/\1/')"
+    if [ -z "$reported" ]; then
+        fail "$case: the loader never reported a screen mode; see $log"
+        kill "$qpid" 2>/dev/null
+        wait "$qpid" 2>/dev/null
+        return 1
+    fi
+    if [ "$want" != "any" ] && [ "$reported" != "$want" ]; then
+        fail "$case: asked the firmware for $want, the loader drew into $reported"
+        printf '        the mode request was not honoured; nothing was captured, because a\n'
+        printf '        %s file would be a lie\n' "$want"
+        kill "$qpid" 2>/dev/null
+        wait "$qpid" 2>/dev/null
+        return 1
+    fi
+
+    local png="$OUT/$base-$reported.png"
+    local ppm="${png%.png}.ppm"
+    rm -f "$png" "$ppm"
 
     python3 - "$sock" "$ppm" <<'PY'
 import socket, sys, time
@@ -184,25 +218,27 @@ PY
     kill "$qpid" 2>/dev/null
     wait "$qpid" 2>/dev/null
 
-    [ -s "$ppm" ] || { fail "$name: no screendump written"; return 1; }
+    [ -s "$ppm" ] || { fail "$case: no screendump written"; return 1; }
     local got
-    got="$(ppm_to_png "$ppm" "$png")" || { fail "$name: could not convert the screendump"; return 1; }
+    got="$(ppm_to_png "$ppm" "$png")" || { fail "$case: could not convert the screendump"; return 1; }
     rm -f "$ppm"
-    if [ "$got" = "$expect" ]; then
-        pass "$name.png is $got, as expected"
+    if [ "$got" = "$reported" ]; then
+        pass "$(basename "$png") is $got, the mode the loader reported (stride $stride)"
     else
-        fail "$name.png is $got, expected $expect"
+        fail "$(basename "$png") is $got but the loader reported $reported — the file name would be a lie"
     fi
     printf '      from the serial log:\n'
     grep -E "stage=gop event=(selected|hint)|stage=screen result" "$log" | sed 's/^/        /' | head -4
     rm -f "$dir/dist/argus-disk.img"
 }
 
-# --- 1. successful boot at 1920x1080 ---------------------------------------
-capture boot-1920x1080 "stage=halt event=boot_proven" 1920x1080
+# --- 1. successful boot at the firmware's own preferred mode ----------------
+capture boot-default boot "stage=halt event=boot_proven" any
 
-# --- 2. successful boot at 640x480 -----------------------------------------
-capture boot-640x480 "stage=halt event=boot_proven" 640x480 \
+# --- 2. the same boot, forced down to 640x480 through QEMU's fw_cfg --------
+# The loader is asked for a small mode; if the firmware will not give it, the
+# case fails instead of writing a file with the wrong resolution in its name.
+capture boot-low boot "stage=halt event=boot_proven" 640x480 \
     -fw_cfg name=opt/argus/screen,string=640x480
 
 # --- 3. refusal: no manifest ------------------------------------------------
@@ -213,7 +249,7 @@ rm -rf "$REFUSAL_DIR"
 mkdir -p "$REFUSAL_DIR"
 REFUSAL_IMG="$(new_image "$REFUSAL_DIR")"
 MTOOLS_SKIP_CHECK=1 mdel -i "$REFUSAL_IMG@@1M" ::/ARGUS/ARGUS.MF || die "could not delete the manifest"
-capture refusal-missing-manifest "code=E_MANIFEST_ABSENT" 1920x1080
+capture refusal-missing-manifest refusal-missing-manifest "code=E_MANIFEST_ABSENT" any
 
 printf '\n'
 if [ "$FAILED" -ne 0 ]; then

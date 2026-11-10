@@ -96,6 +96,13 @@ pub struct Console {
     /// Text columns and rows at `scale`.
     cols: u32,
     rows: u32,
+    /// First row that scrolls. Everything above it is a fixed band the caller
+    /// painted once (the header) and that scrolling must never move.
+    scroll_top: u32,
+    /// One past the last row that scrolls. Everything from here down is a fixed
+    /// band reserved for the caller (the kernel's block), so a long stage list
+    /// can never be drawn over it.
+    scroll_bottom: u32,
     /// Cursor, in cells.
     col: u32,
     row: u32,
@@ -159,6 +166,8 @@ impl Console {
             scale,
             cols,
             rows,
+            scroll_top: 0,
+            scroll_bottom: rows,
             col: 0,
             row: 0,
         })
@@ -240,7 +249,7 @@ impl Console {
         let (w, h) = (self.width, self.height);
         self.fill_rect(0, 0, w, h, rgb);
         self.col = 0;
-        self.row = 0;
+        self.row = self.scroll_top;
     }
 
     /// Draw `text` with its top-left corner at `(x, y)` in pixels, at `scale`.
@@ -314,41 +323,66 @@ impl Console {
         self.newline();
     }
 
-    /// Move to the start of the next line, scrolling when past the bottom.
+    /// Move to the start of the next line, scrolling when past the bottom of the
+    /// scrolling region.
     fn newline(&mut self) {
         self.col = 0;
         self.row += 1;
-        if self.row >= self.rows {
+        if self.row >= self.scroll_bottom {
             self.scroll();
         }
     }
 
-    /// Scroll up by exactly one text row.
+    /// Set the band of rows that may scroll: `[top, bottom)`.
     ///
-    /// The framebuffer is one contiguous run of `stride * height` pixels, so
-    /// one `copy` of everything below the top text row moves the picture up,
-    /// padding included. `ptr::copy` — not `copy_nonoverlapping` — because the
-    /// source and destination overlap.
+    /// The rows above `top` are the fixed header and the rows from `bottom` down
+    /// are the fixed footer, and neither is ever moved by [`Console::scroll`].
+    /// That is what keeps the header on screen no matter how long the stage list
+    /// gets, and what stops the kernel's block from being drawn on.
+    ///
+    /// Degenerate requests are clamped rather than rejected: there is always at
+    /// least one scrolling row, because a console that cannot print is worse
+    /// than a console with an ugly layout.
+    pub fn set_scroll_region(&mut self, top: u32, bottom: u32) {
+        let top = top.min(self.rows.saturating_sub(1));
+        let bottom = bottom.clamp(top + 1, self.rows);
+        self.scroll_top = top;
+        self.scroll_bottom = bottom;
+        self.row = self.row.clamp(top, bottom - 1);
+    }
+
+    /// The scrolling band, as `(top, bottom)`, in rows.
+    pub const fn scroll_region(&self) -> (u32, u32) {
+        (self.scroll_top, self.scroll_bottom)
+    }
+
+    /// Scroll the scrolling region up by exactly one text row.
+    ///
+    /// Rows are one contiguous run of `stride` pixels each, so one `copy` of
+    /// everything below the region's top row moves the region up, padding
+    /// included, and leaves the header band above and the footer band below
+    /// untouched. `ptr::copy` — not `copy_nonoverlapping` — because the source
+    /// and destination overlap.
     fn scroll(&mut self) {
         let line = GLYPH_HEIGHT as usize * self.scale as usize;
         let pitch = self.pitch();
-        let total = self.height as usize;
-        if line >= total {
-            self.fill_rect(0, 0, self.width, self.height, RGB_BACKGROUND);
-        } else {
-            let keep = (total - line) * pitch;
-            // SAFETY: source is `base + line * pitch`, destination is `base`,
-            // and both spans are within `total * pitch` bytes of the buffer,
-            // which is inside the framebuffer (`height` was clamped by
-            // `size_bytes`).
-            unsafe {
-                core::ptr::copy(self.base.add(line * pitch), self.base, keep);
-            }
-            let bg = self.encode(RGB_BACKGROUND);
-            let (w, h) = (self.width, self.height);
-            self.fill_rect(0, h - line as u32, w, line as u32, bg);
+        let top = self.scroll_top as usize;
+        let bottom = self.scroll_bottom as usize;
+        let region = bottom.saturating_sub(top);
+        self.row = self.scroll_bottom - 1;
+        if region <= 1 {
+            self.fill_rect(0, (top * line) as u32, self.width, line as u32, RGB_BACKGROUND);
+            return;
         }
-        self.row = self.rows - 1;
+        let keep = (region - 1) * line * pitch;
+        // SAFETY: the source starts one text row below the region's top and the
+        // span is `region - 1` rows, so both ends stay inside `rows` rows of the
+        // buffer — which `height` already clamped to `size_bytes`.
+        unsafe {
+            core::ptr::copy(self.base.add((top + 1) * line * pitch), self.base.add(top * line * pitch), keep);
+        }
+        let bg = self.encode(RGB_BACKGROUND);
+        self.fill_rect(0, ((bottom - 1) * line) as u32, self.width, line as u32, bg);
     }
 
     /// Draw a one-pixel-tall (times scale) horizontal rule across the width.
@@ -357,11 +391,14 @@ impl Console {
         self.fill_rect(0, y, w, self.scale, rgb);
     }
 
-    /// Move the text cursor, clamped to the screen. Used by the kernel to write
+    /// Move the text cursor, clamped to the scrolling region. Used by the loader
+    /// to start the stage list under the header, and by the kernel to write
     /// below what the loader left on screen instead of over it.
     pub fn set_cursor(&mut self, col: u32, row: u32) {
         self.col = col.min(self.cols.saturating_sub(1));
-        self.row = row.min(self.rows.saturating_sub(1));
+        let low = self.scroll_top;
+        let high = self.scroll_bottom.saturating_sub(1).max(low);
+        self.row = row.clamp(low, high);
     }
 
     /// Where the cursor is, in pixels: the top-left corner of the next glyph.
