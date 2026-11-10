@@ -281,9 +281,20 @@ impl Args {
         Ok(Args { command, flags })
     }
 
+    /// The *last* occurrence wins, as it does for every other CLI.
+    ///
+    /// This is not cosmetic. The tests build a manifest from a fixed baseline
+    /// of flags and then append the one flag that makes it hostile
+    /// (`--slot B`, `--key other-key.pem`, `--min-loader-version 99`, ...). If
+    /// the first occurrence won, the baseline value would silently survive and
+    /// every one of those cases would sign a perfectly good manifest and then
+    /// fail with "the loader accepted it" — the test would look like a loader
+    /// defect while the harness was the thing lying. Observed exactly that on
+    /// 2026-11-08: wrongkey, unknownkey and slotmismatch all "booted".
     fn get(&self, name: &str) -> Option<&str> {
         self.flags
             .iter()
+            .rev()
             .find(|(n, _)| n == name)
             .map(|(_, v)| v.as_str())
     }
