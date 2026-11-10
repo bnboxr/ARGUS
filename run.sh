@@ -154,6 +154,27 @@ forbid() {
         missing=1
     fi
 }
+# require_one <label> <literal>... — at least one of the literals must appear.
+#
+# For a stage that has exactly one of several legitimate outcomes. The floor
+# stage is the case that forced this: it ends in `event=stable` when there is
+# nothing to raise, and in `event=raised` when the previous boot's confirmation
+# marker lets it go up. Demanding only `stable` made the *second* boot of a good
+# image fail `./run.sh` with a missing stage, even though the loader had done
+# everything right — measured on 2026-11-08, see manifest-tests "floor rises".
+# The two outcomes stay mutually exclusive in the loader, and which one is
+# correct for a given boot is asserted by the test, not guessed here.
+require_one() {
+    local label="$1"; shift
+    local lit
+    for lit in "$@"; do
+        if grep -qF "$lit" "$LOG"; then
+            return 0
+        fi
+    done
+    printf '\033[1;31m[run] MISSING:\033[0m %s (none of: %s)\n' "$label" "$*" >&2
+    missing=1
+}
 
 # The security chain, in the order the loader enforces it. These are not
 # decoration: each one is a check that has a matching negative test.
@@ -166,7 +187,9 @@ require "[ARGUS-LOADER] stage=confirm event="
 require "[ARGUS-LOADER] stage=config result=MATCH"
 require "[ARGUS-LOADER] stage=kernel-digest result=MATCH"
 require "[ARGUS-LOADER] stage=initrd-digest result=MATCH"
-require "[ARGUS-LOADER] stage=floor event=stable"
+require_one "[ARGUS-LOADER] stage=floor outcome" \
+    "[ARGUS-LOADER] stage=floor event=stable" \
+    "[ARGUS-LOADER] stage=floor event=raised"
 require "[ARGUS-LOADER] stage=confirm event=pending"
 
 # The ordered trace the loader is responsible for.

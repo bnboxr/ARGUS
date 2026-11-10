@@ -286,8 +286,15 @@ non-zero on any of them: `E_MANIFEST_ABSENT`, `E_MANIFEST_MAGIC`,
 `E_FLOOR_CORRUPT`, `E_CONFIG_LEN`, `E_CONFIG_DIGEST`, `E_KERNEL_UNREADABLE`,
 `E_KERNEL_LEN`, `E_KERNEL_DIGEST`, `E_INITRD_DIGEST`.
 
-**The key is a test key.** See `keys/test/README.md`. It is committed with its
-private half. A boot proven with it proves the mechanism, not the security.
+**The keys are test keys, and the target hierarchy is not built yet.** The owner
+ratified the hybrid model (`boot-trust-model-v1.md` §5): the user owns K1 (`db`),
+K2 (kernel) and K3 (manifest); ARGUS owns only K5 (recovery), which the owner can
+delete at enrolment (`recovery_key = none`) and lose fleet-level recovery with it.
+Private keys never touch the ARGUS machine — signing happens on an offline host,
+and the loader only ever holds public keys. None of that is implemented: there is
+no enrolment, no `db` write path and no K5. The key committed here with its
+private half is a test key; a boot proven with it proves the mechanism, not the
+security, and it is not a trust root. See `keys/test/README.md`.
 
 **The floor is a placeholder, and it is not tamper-proof.** `\ARGUS\FLOOR` is a
 4096-byte file on the ESP with two CRC-32-protected copies at offsets 0 and 2048;
