@@ -345,13 +345,29 @@ pub struct GopModeInfo {
     pub pixels_per_scan_line: u32,
 }
 
-/// `EFI_GRAPHICS_OUTPUT_PROTOCOL`. Only `Mode` is read; the three function
-/// pointers are declared as `usize` slots to keep the offsets right without
-/// writing types we never call.
+/// `EFI_GRAPHICS_OUTPUT_PROTOCOL.QueryMode`.
+///
+/// Allocates an `EFI_GRAPHICS_OUTPUT_MODE_INFORMATION` with `AllocatePool` and
+/// hands ownership to the caller, who must `FreePool` it. Getting that wrong
+/// leaks a mode-info block per mode queried, which at 128 MiB of guest RAM and a
+/// few dozen modes is survivable but wrong; we free.
+pub type GopQueryMode = unsafe extern "efiapi" fn(
+    this: *mut c_void,
+    mode_number: u32,
+    size_of_info: *mut usize,
+    info: *mut *mut GopModeInfo,
+) -> Status;
+
+/// `EFI_GRAPHICS_OUTPUT_PROTOCOL.SetMode`.
+pub type GopSetMode =
+    unsafe extern "efiapi" fn(this: *mut c_void, mode_number: u32) -> Status;
+
+/// `EFI_GRAPHICS_OUTPUT_PROTOCOL`. `Blt` is declared as a `usize` slot because
+/// we never call it — only the offsets matter for a field we do not touch.
 #[repr(C)]
 pub struct GraphicsOutput {
-    pub query_mode: usize,
-    pub set_mode: usize,
+    pub query_mode: GopQueryMode,
+    pub set_mode: GopSetMode,
     pub blt: usize,
     pub mode: *mut GopMode,
 }

@@ -17,9 +17,16 @@
 //! It never returns. On any failure it prints the reason and halts, so a
 //! failed boot leaves a complete, readable trace on the wire.
 //!
+//! Since the owner's laptop has no serial port, every stage is also drawn on
+//! screen as it happens (see `argus_shared::screen`): the header
+//! `ARGUS v0.1 phase-I`, one line per stage, and a large centred refusal code
+//! when the chain says no. Serial logging is unchanged and both outputs are
+//! always written. This is diagnostic text, not the Boot Manager — no emblem,
+//! no glass, no animation, no menu.
+//!
 //! Deliberately out of scope for this milestone: A/B slots, Secure Boot,
-//! signature checking, page-table setup (the kernel runs on the identity map
-//! UEFI already established), and any graphical output.
+//! page-table setup (the kernel runs on the identity map UEFI already
+//! established), and any interactive or graphical interface.
 
 #![no_std]
 #![no_main]
@@ -27,6 +34,7 @@
 mod efi;
 mod elf;
 mod fat;
+mod fwcfg;
 mod security;
 mod test_key;
 
@@ -38,9 +46,24 @@ use core::ptr::{addr_of, addr_of_mut, null_mut};
 use argus_shared::bootinfo::{
     self, BootInfo, DebugSerial, FramebufferInfo, LoaderReserved, MemoryRegion,
 };
+use argus_shared::fbcon::Line;
+use argus_shared::screen;
 use argus_shared::serial::{Serial, COM1};
 
 use efi::*;
+
+/// Print one stage line on screen with a formatted detail, without allocating.
+///
+/// The screen is the secondary output and must never be able to break a boot:
+/// every failure here is dropped on the floor, exactly like a failed serial
+/// write. If there is no screen, `screen::stage` is a no-op.
+macro_rules! on_screen {
+    ($label:expr, $($arg:tt)*) => {{
+        let mut detail = Line::new();
+        let _ = write!(detail, $($arg)*);
+        screen::stage($label, detail.as_str());
+    }};
+}
 
 /// Version of this loader, printed in the banner and easy to grep.
 ///
@@ -103,12 +126,17 @@ fn halt() -> ! {
 /// Print a refusal and stop. Every security failure ends here, so a refused
 /// boot always leaves both a named code and a final `stage=handoff` line on the
 /// wire, and `run.sh` can never mistake it for success.
+///
+/// The same code is drawn large and centred on screen and left there: the owner
+/// has no serial port, and "the machine stopped" without a reason is exactly the
+/// blind failure this milestone exists to end.
 fn refuse(ser: &mut Serial, r: security::Refusal) -> ! {
     let _ = writeln!(
         ser,
         "[ARGUS-LOADER] stage=handoff result=REFUSED reason=security_policy stage={} code={}",
         r.stage, r.code
     );
+    screen::refusal(r.code);
     halt()
 }
 
@@ -361,6 +389,9 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
 
     // ---- stage: framebuffer ---------------------------------------------
     let fb = find_framebuffer(bs, &mut ser);
+    // The screen is attached by now (or it is not, and every call below is a
+    // no-op). Paint the header before the first stage line.
+    screen::header();
 
     // ---- stage: boot volume ---------------------------------------------
     // Everything from here on needs one thing: the volume this image was
@@ -373,6 +404,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
             let _ = writeln!(ser, "[ARGUS-LOADER] stage=volume event=absent reason=no_loaded_image_protocol");
             let _ = writeln!(ser, "[ARGUS-LOADER] stage=manifest result=REFUSED code=E_MANIFEST_ABSENT detail=\"no volume to read the manifest from\"");
             let _ = writeln!(ser, "[ARGUS-LOADER] stage=handoff result=REFUSED reason=security_policy stage=manifest code=E_MANIFEST_ABSENT");
+            screen::refusal("E_MANIFEST_ABSENT");
             halt();
         }
     };
@@ -414,9 +446,11 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
                 ser,
                 "[ARGUS-LOADER] stage=handoff result=REFUSED reason=security_policy stage=manifest code=E_MANIFEST_ABSENT"
             );
+            screen::refusal("E_MANIFEST_ABSENT");
             halt();
         }
     };
+    on_screen!("volume found", "ESP mounted, reading \\ARGUS\\ARGUS.MF");
 
     // ---- stage: signed manifest -----------------------------------------
     // Nothing has been read from the volume yet except its root directory.
@@ -499,6 +533,12 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
                 "[ARGUS-LOADER] stage=elf-validate result=ACCEPT entry=0x{:x} segments={} phnum={} image_bytes={}",
                 img.entry, img.segment_count, img.phnum, img.image_bytes
             );
+            on_screen!(
+                "ELF validation",
+                "{} PT_LOAD segments, entry 0x{:x}",
+                img.segment_count,
+                img.entry
+            );
             img
         }
         Err(e) => {
@@ -513,6 +553,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
                 "[ARGUS-LOADER] stage=handoff result=REFUSED reason=invalid_kernel code={}",
                 e.code()
             );
+            screen::refusal(e.code());
             halt();
         }
     };
@@ -679,8 +720,14 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     );
     if exit_status != EFI_SUCCESS {
         let _ = writeln!(ser, "[ARGUS-LOADER] stage=handoff result=REFUSED reason=exit_boot_services_failed");
+        screen::refusal("E_EXIT_BOOT_SERVICES");
         halt();
     }
+    on_screen!(
+        "ExitBootServices",
+        "firmware released, map key 0x{:x}",
+        map_key
+    );
 
     // The map key that actually worked is the one the kernel needs to reason
     // about the map it was handed, so record it before sealing.
@@ -720,6 +767,14 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         ser,
         "[ARGUS-LOADER] stage=handoff event=jump entry=0x{:x} bootinfo=0x{:x} abi=sysv-x86_64 arg0=rdi checksum=0x{:08x}",
         image.entry, bootinfo_ptr as usize, bi.checksum
+    );
+    // The last thing the loader draws. The kernel draws its own banner below
+    // this line, so the screen ends up showing both halves of the handoff.
+    on_screen!(
+        "handoff",
+        "jumped to kernel at 0x{:x}, BootInfo 0x{:x}",
+        image.entry,
+        bootinfo_ptr as usize
     );
 
     // SAFETY: the entry point was validated to lie inside an executable
@@ -854,12 +909,32 @@ fn find_acpi(st: &SystemTable, ser: &mut Serial) -> AcpiInfo {
 // Framebuffer
 // ---------------------------------------------------------------------------
 
-/// Read the current GOP mode into the `BootInfo` form.
+/// Resolutions the screen prefers, best first.
+///
+/// 1920x1080 is what the owner's laptop panel is and what the boot output is
+/// laid out for; the rest are honest fallbacks for firmware that offers less.
+/// Anything not on this list is still usable — see `choose_mode`, which falls
+/// back to the largest mode the firmware does offer, 640x480 included.
+const PREFERRED_MODES: [(u32, u32); 5] = [
+    (1920, 1080),
+    (1280, 720),
+    (1024, 768),
+    (800, 600),
+    (640, 480),
+];
+
+/// Read the current GOP mode, choose a resolution, and set it.
 ///
 /// With `-display none` there is still a VGA device, so OVMF normally has a
 /// GOP; if it does not, the fields stay zero and the flag stays clear. A missing
 /// GOP must never stop a boot — the serial console is the diagnostic channel
 /// (Phase I §9: "Pornirea fără interfață grafică rămâne posibilă").
+///
+/// Mode selection is deliberate rather than "whatever the firmware left": the
+/// firmware's default is often 800x600, which wastes a 1080p panel and makes the
+/// boot text hard to read from a sofa. QueryMode is called for every mode,
+/// which is also the only way to log what the machine actually offers — useful
+/// when the same image is tried on the owner's hardware.
 fn find_framebuffer(bs: &BootServices, ser: &mut Serial) -> FramebufferInfo {
     let mut count = 0usize;
     let mut buf: *mut Handle = null_mut();
@@ -922,6 +997,7 @@ fn find_framebuffer(bs: &BootServices, ser: &mut Serial) -> FramebufferInfo {
     // checked that at least that many bytes are there.
     let info = unsafe { &*mode.info };
 
+    // The mode the firmware left us in, before anything is changed.
     let _ = writeln!(
         ser,
         "[ARGUS-LOADER] stage=gop event=present mode={} max_mode={} base=0x{:x} size=0x{:x} resolution={}x{} stride={} format={}",
@@ -935,14 +1011,183 @@ fn find_framebuffer(bs: &BootServices, ser: &mut Serial) -> FramebufferInfo {
         bootinfo::pixel_format::name(info.pixel_format)
     );
 
-    FramebufferInfo {
+    // ---- enumerate -------------------------------------------------------
+    // Every mode is queried and logged. This is how "prefer 1920x1080 if it is
+    // offered" is answered with a measurement instead of an assumption, and the
+    // log then says which modes this machine has.
+    let mut best_preferred: Option<(usize, u32, u32, usize)> = None; // (rank, w, h, index)
+    let mut largest: Option<(u32, u32, u32, u32)> = None; // (area, index, w, h)
+    let mut hint_mode: Option<(u32, u32, u32)> = None; // (index, w, h)
+    let hint = fwcfg::screen_hint();
+    if let Some(h) = &hint {
+        let _ = writeln!(
+            ser,
+            "[ARGUS-LOADER] stage=gop event=hint source=fw_cfg requested={}x{}",
+            h.width, h.height
+        );
+    }
+    for index in 0..mode.max_mode {
+        let mut size: usize = 0;
+        let mut ptr: *mut GopModeInfo = null_mut();
+        // SAFETY: `gop` is live, `index < max_mode`, and the out-parameters are
+        // valid locals. On success the firmware allocates the info block.
+        let qs = unsafe { (gop.query_mode)(proto, index, &mut size, &mut ptr) };
+        if is_error(qs) || ptr.is_null() {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=gop event=mode-query index={} result=FAILED status=0x{:x}",
+                index, qs
+            );
+            continue;
+        }
+        // SAFETY: the firmware just returned a valid mode-info block of at least
+        // `size` bytes at `ptr`.
+        let mi = unsafe { &*ptr };
+        let _ = writeln!(
+            ser,
+            "[ARGUS-LOADER] stage=gop event=mode-query index={} resolution={}x{} stride={} format={}",
+            index,
+            mi.horizontal_resolution,
+            mi.vertical_resolution,
+            mi.pixels_per_scan_line,
+            bootinfo::pixel_format::name(mi.pixel_format)
+        );
+        let (w, h) = (mi.horizontal_resolution, mi.vertical_resolution);
+        // A mode we cannot draw into is not a candidate. BltOnly has no linear
+        // framebuffer at all, and BitMask needs per-channel masks that
+        // `FramebufferInfo` does not carry (see `fbcon`).
+        let drawable = mi.pixel_format == bootinfo::pixel_format::RED_GREEN_BLUE_RESERVED_8BIT
+            || mi.pixel_format == bootinfo::pixel_format::BLUE_GREEN_RED_RESERVED_8BIT;
+        if drawable && mi.pixels_per_scan_line >= w {
+            if let Some(hint) = &hint {
+                if hint_mode.is_none() && w == hint.width && h == hint.height {
+                    hint_mode = Some((index, w, h));
+                }
+            }
+            if let Some(rank) = PREFERRED_MODES.iter().position(|&(pw, ph)| pw == w && ph == h) {
+                if best_preferred.map_or(true, |b| rank < b.0) {
+                    best_preferred = Some((rank, w, h, index as usize));
+                }
+            }
+            if largest.map_or(true, |l| w * h > l.0) {
+                largest = Some((w * h, index, w, h));
+            }
+        }
+        // SAFETY: `ptr` was allocated by QueryMode with the firmware's pool
+        // allocator; the caller owns it and frees it exactly once.
+        unsafe { (bs.free_pool)(ptr as *mut u8) };
+    }
+
+    // ---- choose ----------------------------------------------------------
+    // An explicit request from the hypervisor (`-fw_cfg
+    // name=opt/argus/screen,string=640x480`) wins if the firmware really offers
+    // that mode. Absent on real hardware; see `fwcfg`.
+    let chosen = match (hint_mode, best_preferred, largest) {
+        (Some((index, w, h)), _, _) => Some((index, w, h, true, 9)),
+        (None, Some((rank, w, h, index)), _) => Some((index as u32, w, h, true, rank)),
+        (None, None, Some((_, index, w, h))) => Some((index, w, h, false, 0)),
+        (None, None, None) => None,
+    };
+
+    let Some((index, want_w, want_h, preferred, rank)) = chosen else {
+        let _ = writeln!(
+            ser,
+            "[ARGUS-LOADER] stage=gop event=no-drawable-mode modes={} detail=\"every mode was BltOnly, BitMask, or had stride < width\"",
+            mode.max_mode
+        );
+        return FramebufferInfo::ZERO;
+    };
+
+    // ---- set -------------------------------------------------------------
+    if index != mode.mode {
+        // SAFETY: `gop` is live and `index` came from a successful QueryMode.
+        let ss = unsafe { (gop.set_mode)(proto, index) };
+        let _ = writeln!(
+            ser,
+            "[ARGUS-LOADER] stage=gop event=mode-set index={} resolution={}x{} preferred={} rank={} status=0x{:x} result={}",
+            index,
+            want_w,
+            want_h,
+            preferred as u8,
+            rank,
+            ss,
+            if is_error(ss) { "FAILED" } else { "OK" }
+        );
+        if is_error(ss) {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=gop event=mode-set result=KEEPING_CURRENT index={} detail=\"SetMode refused; drawing into the mode the firmware left\"",
+                mode.mode
+            );
+        }
+    } else {
+        let _ = writeln!(
+            ser,
+            "[ARGUS-LOADER] stage=gop event=mode-set index={} resolution={}x{} preferred={} rank={} result=ALREADY_CURRENT",
+            index, want_w, want_h, preferred as u8, rank
+        );
+    }
+
+    // Re-read `Mode` after SetMode: the base address and size are allowed to
+    // change with the mode, and the info block is rewritten in place.
+    // SAFETY: `gop.mode` is firmware-owned and non-null (checked above).
+    let mode = unsafe { &*gop.mode };
+    if mode.info.is_null() || mode.size_of_info < core::mem::size_of::<GopModeInfo>() {
+        let _ = writeln!(
+            ser,
+            "[ARGUS-LOADER] stage=gop event=absent reason=no_mode_info_after_set size={}",
+            mode.size_of_info
+        );
+        return FramebufferInfo::ZERO;
+    }
+    // SAFETY: as above — the info block the firmware just rewrote.
+    let info = unsafe { &*mode.info };
+
+    let fb = FramebufferInfo {
         phys: mode.framebuffer_base,
         width: info.horizontal_resolution,
         height: info.vertical_resolution,
         stride: info.pixels_per_scan_line,
         pixel_format: info.pixel_format,
         size_bytes: mode.framebuffer_size as u64,
+    };
+
+    let _ = writeln!(
+        ser,
+        "[ARGUS-LOADER] stage=gop event=selected mode={} base=0x{:x} resolution={}x{} stride={} format={} bytes_per_row={} size=0x{:x}",
+        mode.mode,
+        fb.phys,
+        fb.width,
+        fb.height,
+        fb.stride,
+        bootinfo::pixel_format::name(fb.pixel_format),
+        fb.stride as u64 * 4,
+        fb.size_bytes
+    );
+
+    // ---- attach the on-screen console ------------------------------------
+    match screen::attach(fb) {
+        Ok(()) => {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=screen result=READY width={} height={} stride={}",
+                fb.width, fb.height, fb.stride
+            );
+        }
+        Err(reason) => {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=screen result=ABSENT reason={} width={} height={} stride={} format={}",
+                reason.reason(),
+                fb.width,
+                fb.height,
+                fb.stride,
+                bootinfo::pixel_format::name(fb.pixel_format)
+            );
+        }
     }
+
+    fb
 }
 
 // ---------------------------------------------------------------------------

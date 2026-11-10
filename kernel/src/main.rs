@@ -28,6 +28,8 @@ use core::fmt::Write;
 use core::panic::PanicInfo;
 
 use argus_shared::bootinfo::{self, memory_type, BootInfo};
+use argus_shared::fbcon::{RGB_DIM, RGB_OK};
+use argus_shared::screen;
 use argus_shared::serial::{Serial, COM1};
 
 /// Version of the kernel side, printed in the banner.
@@ -428,6 +430,37 @@ pub extern "C" fn kmain(bootinfo: *const BootInfo) -> ! {
         bi.kernel_phys_start,
         (start_addr == bi.segments[0].paddr && start_addr == bi.kernel_phys_start) as u8
     );
+
+    // ---- the screen ------------------------------------------------------
+    // Only now, after the checksum proved every field including the framebuffer
+    // is the one the loader sealed. Drawing into a framebuffer described by an
+    // unverified `BootInfo` would mean writing to an address an attacker chose,
+    // so a kernel that refuses BootInfo says so on serial only — the screen it
+    // would have used is not trustworthy enough to touch.
+    match screen::attach(bi.framebuffer) {
+        Ok(()) => {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-KERNEL] stage=screen result=READY width={} height={} stride={}",
+                bi.framebuffer.width, bi.framebuffer.height, bi.framebuffer.stride
+            );
+            // The line the owner asked to see: written by the kernel, below the
+            // loader's stage log, in the colour that means "this is real".
+            screen::alive("ARGUS kernel is alive");
+            screen::note("BootInfo checksum verified, halted in hlt", RGB_DIM);
+            screen::note("serial log: COM1 115200", RGB_OK);
+        }
+        Err(reason) => {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-KERNEL] stage=screen result=ABSENT reason={} width={} height={} stride={}",
+                reason.reason(),
+                bi.framebuffer.width,
+                bi.framebuffer.height,
+                bi.framebuffer.stride
+            );
+        }
+    }
 
     let _ = writeln!(ser, "[ARGUS-KERNEL] stage=halt event=ready state=loop_hlt");
     let _ = writeln!(

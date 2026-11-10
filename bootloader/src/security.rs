@@ -34,6 +34,8 @@ use argus_security::floor::{
 use argus_security::manifest::{Manifest, SLOT_A};
 use argus_security::rsa::{self, PublicKey};
 use argus_security::sha256;
+use argus_shared::fbcon::Line;
+use argus_shared::screen;
 use argus_shared::serial::Serial;
 
 use crate::efi::*;
@@ -358,6 +360,18 @@ pub fn enforce_manifest(
         Hex(&manifest.initrd_digest)
     );
 
+    {
+        let mut detail = Line::new();
+        let _ = write!(
+            detail,
+            "slot {} security_version {} version {}",
+            slot_name(manifest.slot),
+            manifest.security_version,
+            manifest.manifest_version
+        );
+        screen::stage("manifest parsed", detail.as_str());
+    }
+
     // --- key id, then signature -------------------------------------------
     // The id is checked first so a manifest signed by some other key is
     // reported as such. A manifest that claims *our* key id but carries a
@@ -393,6 +407,7 @@ pub fn enforce_manifest(
                 Hex(&manifest.key_id),
                 manifest.sig_len
             );
+            screen::stage("signature valid", "RSA-2048 PKCS#1 v1.5, SHA-256");
         }
         Err(e) => {
             let _ = writeln!(
@@ -561,6 +576,18 @@ pub fn enforce_rollback(
         manifest.security_version
     );
 
+    {
+        let mut detail = Line::new();
+        let _ = write!(
+            detail,
+            "floor {} pending {} security_version {}",
+            floor_record.0.floor,
+            pending_floor,
+            manifest.security_version
+        );
+        screen::stage("floor value", detail.as_str());
+    }
+
     if manifest.security_version < effective {
         let _ = writeln!(
             ser,
@@ -706,6 +733,17 @@ pub fn verify_kernel(manifest: &Manifest, bytes: &[u8], ser: &mut Serial) -> Res
         Hex(&digest),
         bytes.len()
     );
+    {
+        // First 16 hex characters are plenty for a human to compare against the
+        // serial log; the full digest stays there.
+        let mut hex = Line::new();
+        let _ = write!(hex, "{}", Hex(&digest));
+        let hex = hex.as_str();
+        let short = if hex.len() >= 16 { &hex[..16] } else { hex };
+        let mut detail = Line::new();
+        let _ = write!(detail, "sha256 {}... {} bytes", short, bytes.len());
+        screen::stage("kernel digest", detail.as_str());
+    }
     Ok(())
 }
 
