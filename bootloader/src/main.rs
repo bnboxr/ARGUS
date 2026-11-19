@@ -388,7 +388,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     let acpi = find_acpi(&st, &mut ser);
 
     // ---- stage: framebuffer ---------------------------------------------
-    let fb = find_framebuffer(bs, &mut ser);
+    let fb = find_framebuffer(bs, image_handle, &mut ser);
     // The screen is attached by now (or it is not, and every call below is a
     // no-op). Paint the header before the first stage line.
     screen::header();
@@ -935,7 +935,7 @@ const PREFERRED_MODES: [(u32, u32); 5] = [
 /// boot text hard to read from a sofa. QueryMode is called for every mode,
 /// which is also the only way to log what the machine actually offers — useful
 /// when the same image is tried on the owner's hardware.
-fn find_framebuffer(bs: &BootServices, ser: &mut Serial) -> FramebufferInfo {
+fn find_framebuffer(bs: &BootServices, image_handle: Handle, ser: &mut Serial) -> FramebufferInfo {
     let mut count = 0usize;
     let mut buf: *mut Handle = null_mut();
     // SAFETY: `locate_handle_buffer` allocates the array with pool memory and
@@ -1018,14 +1018,32 @@ fn find_framebuffer(bs: &BootServices, ser: &mut Serial) -> FramebufferInfo {
     let mut best_preferred: Option<(usize, u32, u32, usize)> = None; // (rank, w, h, index)
     let mut largest: Option<(u32, u32, u32, u32)> = None; // (area, index, w, h)
     let mut hint_mode: Option<(u32, u32, u32)> = None; // (index, w, h)
-    let hint = fwcfg::screen_hint();
-    if let Some(h) = &hint {
-        let _ = writeln!(
-            ser,
-            "[ARGUS-LOADER] stage=gop event=hint source=fw_cfg requested={}x{}",
-            h.width, h.height
-        );
-    }
+    // The modes this firmware actually offers, kept so that a hint it cannot
+    // satisfy can be answered with a list instead of a shrug.
+    let mut offered: [(u32, u32); 16] = [(0, 0); 16];
+    let mut offered_count = 0usize;
+
+    // Precedence: `\ARGUS\SCREEN.CFG` on the ESP wins, then the hypervisor's
+    // `fw_cfg` hint, then the preference list below. Both hints can only pick a
+    // mode the firmware offers; neither is required for a boot.
+    let hint = match read_screen_cfg(bs, image_handle, ser) {
+        Some(h) => {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=gop event=hint source=esp_file path={} requested={}x{}",
+                fwcfg::SCREEN_CFG_PATH, h.width, h.height
+            );
+            Some(h)
+        }
+        None => fwcfg::screen_hint().map(|h| {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=gop event=hint source=fw_cfg requested={}x{}",
+                h.width, h.height
+            );
+            h
+        }),
+    };
     for index in 0..mode.max_mode {
         let mut size: usize = 0;
         let mut ptr: *mut GopModeInfo = null_mut();
@@ -1059,6 +1077,10 @@ fn find_framebuffer(bs: &BootServices, ser: &mut Serial) -> FramebufferInfo {
         let drawable = mi.pixel_format == bootinfo::pixel_format::RED_GREEN_BLUE_RESERVED_8BIT
             || mi.pixel_format == bootinfo::pixel_format::BLUE_GREEN_RED_RESERVED_8BIT;
         if drawable && mi.pixels_per_scan_line >= w {
+            if offered_count < offered.len() {
+                offered[offered_count] = (w, h);
+                offered_count += 1;
+            }
             if let Some(hint) = &hint {
                 if hint_mode.is_none() && w == hint.width && h == hint.height {
                     hint_mode = Some((index, w, h));
@@ -1079,9 +1101,23 @@ fn find_framebuffer(bs: &BootServices, ser: &mut Serial) -> FramebufferInfo {
     }
 
     // ---- choose ----------------------------------------------------------
-    // An explicit request from the hypervisor (`-fw_cfg
-    // name=opt/argus/screen,string=640x480`) wins if the firmware really offers
-    // that mode. Absent on real hardware; see `fwcfg`.
+    // An explicit request — `\ARGUS\SCREEN.CFG` on the ESP, or the hypervisor's
+    // `-fw_cfg name=opt/argus/screen,string=640x480` — wins if the firmware
+    // really offers that mode. A request it cannot satisfy is logged with the
+    // modes it *does* offer, and the boot continues on the normal preference
+    // order: a display hint must never be able to stop a boot.
+    if let Some(h) = &hint {
+        if hint_mode.is_none() {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=gop event=hint result=UNAVAILABLE requested={}x{} offered_modes={} detail=\"the firmware does not offer that mode; falling back to the preference order\"",
+                h.width, h.height, offered_count
+            );
+            for &(w, h) in offered[..offered_count].iter() {
+                let _ = writeln!(ser, "[ARGUS-LOADER] stage=gop event=offered resolution={}x{}", w, h);
+            }
+        }
+    }
     let chosen = match (hint_mode, best_preferred, largest) {
         (Some((index, w, h)), _, _) => Some((index, w, h, true, 9)),
         (None, Some((rank, w, h, index)), _) => Some((index as u32, w, h, true, rank)),
@@ -1188,6 +1224,81 @@ fn find_framebuffer(bs: &BootServices, ser: &mut Serial) -> FramebufferInfo {
     }
 
     fb
+}
+
+// ---------------------------------------------------------------------------
+// Screen configuration
+// ---------------------------------------------------------------------------
+
+/// Read `\ARGUS\SCREEN.CFG` from the ESP: one line, `WxH`, e.g. `640x480`.
+///
+/// An absent file, an unreadable volume or a malformed line all return `None`
+/// and are logged; none of them can stop a boot. The volume is resolved quietly
+/// through the loaded image's device handle — the first route `find_boot_volume`
+/// takes — so this does not add volume-stage noise to the log.
+///
+/// Nothing security-relevant depends on this file: it can only choose a display
+/// mode out of the ones the firmware already offers, and the serial log records
+/// what was asked for and what was used.
+fn read_screen_cfg(
+    bs: &BootServices,
+    image_handle: Handle,
+    ser: &mut Serial,
+) -> Option<fwcfg::ModeHint> {
+    let Some(li_ptr) = get_loaded_image(bs, image_handle) else {
+        let _ = writeln!(
+            ser,
+            "[ARGUS-LOADER] stage=screen-cfg event=absent reason=no_loaded_image"
+        );
+        return None;
+    };
+    // SAFETY: the firmware just returned a live EFI_LOADED_IMAGE_PROTOCOL for
+    // our own image handle.
+    let li = unsafe { &*li_ptr };
+    let Some(sfs) = probe_sfs(bs, li.device_handle) else {
+        let _ = writeln!(
+            ser,
+            "[ARGUS-LOADER] stage=screen-cfg event=absent reason=no_filesystem"
+        );
+        return None;
+    };
+    let (buf, len) = match security::read_file(bs, sfs, fwcfg::SCREEN_CFG_PATH, 32) {
+        Ok(v) => v,
+        Err(reason) => {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=screen-cfg event=absent path={} reason={}",
+                fwcfg::SCREEN_CFG_PATH,
+                reason
+            );
+            return None;
+        }
+    };
+    // SAFETY: `read_file` returned a pool buffer holding exactly `len`
+    // initialised bytes, valid until ExitBootServices.
+    let bytes = unsafe { core::slice::from_raw_parts(buf, len) };
+    match fwcfg::parse_mode(bytes) {
+        Some(h) => {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=screen-cfg event=present path={} bytes={} requested={}x{}",
+                fwcfg::SCREEN_CFG_PATH,
+                len,
+                h.width,
+                h.height
+            );
+            Some(h)
+        }
+        None => {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=screen-cfg event=absent path={} reason=bad_format bytes={}",
+                fwcfg::SCREEN_CFG_PATH,
+                len
+            );
+            None
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

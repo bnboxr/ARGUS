@@ -1,9 +1,9 @@
-build_seconds=0.42
-qemu_to_loader_banner_ms=2681
-qemu_to_exit_boot_services_ms=2903
-qemu_to_handoff_ms=2905
-qemu_to_kernel_banner_ms=2908
-qemu_to_kernel_halt_ms=3084
+build_seconds=2.21
+qemu_to_loader_banner_ms=2736
+qemu_to_exit_boot_services_ms=2944
+qemu_to_handoff_ms=2946
+qemu_to_kernel_banner_ms=2949
+qemu_to_kernel_halt_ms=3111
 drive_interface=virtio
 firmware=/usr/share/OVMF/OVMF_CODE_4M.fd
-run_utc=2026-11-10T13:11:10Z
+run_utc=2026-11-19T01:36:08Z

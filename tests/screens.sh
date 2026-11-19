@@ -18,15 +18,19 @@
 # that boot, and the test fails if the PNG header disagrees with it. Nothing is
 # ever named after the mode the test *asked* for.
 #
-# The 640x480 case asks for the small mode through QEMU's fw_cfg
-# (`-fw_cfg name=opt/argus/screen,string=640x480`) because QEMU's default VGA
-# offers every mode up to 2560x1600 and the loader would otherwise pick 1920x1080
-# on all three boots. The image itself is untouched: same bytes, different
-# machine, exactly like a laptop with a 640x480 panel.
+# The 640x480 case asks for the small mode with `\ARGUS\SCREEN.CFG` on the ESP
+# (one line, `640x480`), because QEMU's default VGA offers every mode up to
+# 2560x1600 and the loader would otherwise pick 1920x1080 on all three boots.
+# The loader reads that file, calls GOP SetMode for the resolution it names, and
+# logs what it asked for and what it got; a request the firmware cannot satisfy
+# is logged with the modes it does offer and the boot carries on.
 #
 # QEMU 8.2 writes a binary PPM for `screendump` here even when the filename ends
 # in .png, so the PPM is converted to a real PNG with python's zlib. That keeps
 # the artifact small (a few tens of KB instead of 6 MB) and viewable anywhere.
+# The width and height are then read back out of the PNG's own IHDR chunk and
+# compared with what the loader reported, so a file whose name says 640x480 can
+# only exist if its bytes say 640x480.
 #
 # Each case boots its own copy of the image under /opt (not /home, which is a
 # small volume) and never touches dist/.
@@ -109,6 +113,21 @@ png = (b"\x89PNG\r\n\x1a\n"
        + chunk(b"IDAT", zlib.compress(bytes(rows), 9))
        + chunk(b"IEND", b""))
 open(out, "wb").write(png)
+print("%dx%d" % (width, height))
+PY
+}
+
+# png_ihdr <png> — echo the WxH stored in the PNG's own IHDR chunk.
+#
+# Bytes 12..16 are the chunk type ("IHDR") and 16..24 are width and height as
+# big-endian u32. This is the file talking, not its name.
+png_ihdr() {
+    python3 - "$1" <<'PY'
+import struct, sys
+data = open(sys.argv[1], "rb").read()
+if data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+    sys.exit("no IHDR at offset 12")
+width, height = struct.unpack(">II", data[16:24])
 print("%dx%d" % (width, height))
 PY
 }
@@ -227,19 +246,41 @@ PY
     else
         fail "$(basename "$png") is $got but the loader reported $reported — the file name would be a lie"
     fi
+
+    # The name and the PPM are both things this script wrote. The PNG's own
+    # IHDR is what anyone opening the file will see, so that is what is checked
+    # last and loudest.
+    local ihdr
+    if ! ihdr="$(png_ihdr "$png")"; then
+        fail "$case: could not read the IHDR chunk of $(basename "$png")"
+        return 1
+    fi
+    if [ "$ihdr" != "$reported" ]; then
+        fail "$case: IHDR of $(basename "$png") says $ihdr, the loader reported $reported"
+        printf '        the captured file is not the resolution its name claims\n'
+        return 1
+    fi
+    pass "IHDR bytes in $(basename "$png") read back as $ihdr"
     printf '      from the serial log:\n'
-    grep -E "stage=gop event=(selected|hint)|stage=screen result" "$log" | sed 's/^/        /' | head -4
+    grep -E "stage=(gop|screen-cfg) event=(selected|hint|present)|stage=screen result" "$log" | sed 's/^/        /' | head -4
     rm -f "$dir/dist/argus-disk.img"
 }
 
 # --- 1. successful boot at the firmware's own preferred mode ----------------
 capture boot-default boot "stage=halt event=boot_proven" any
 
-# --- 2. the same boot, forced down to 640x480 through QEMU's fw_cfg --------
-# The loader is asked for a small mode; if the firmware will not give it, the
-# case fails instead of writing a file with the wrong resolution in its name.
-capture boot-low boot "stage=halt event=boot_proven" 640x480 \
-    -fw_cfg name=opt/argus/screen,string=640x480
+# --- 2. the same boot, forced down to 640x480 by \ARGUS\SCREEN.CFG ----------
+# The loader is asked for a small mode by a file on the ESP. If the firmware
+# will not give it, the loader says so and falls back; the case then fails
+# instead of writing a file with the wrong resolution in its name.
+LOW_DIR="$WORK/boot-low"
+rm -rf "$LOW_DIR"
+mkdir -p "$LOW_DIR"
+LOW_IMG="$(new_image "$LOW_DIR")"
+printf '640x480\n' > "$LOW_DIR/screen.cfg"
+MTOOLS_SKIP_CHECK=1 mcopy -o -i "$LOW_IMG@@1M" "$LOW_DIR/screen.cfg" ::/ARGUS/SCREEN.CFG \
+    || die "could not write \\ARGUS\\SCREEN.CFG into the ESP"
+capture boot-low boot "stage=halt event=boot_proven" 640x480
 
 # --- 3. refusal: no manifest ------------------------------------------------
 # Delete \ARGUS\ARGUS.MF from a copy. The loader must refuse with a named code,

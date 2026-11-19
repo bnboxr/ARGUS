@@ -46,6 +46,13 @@ const NAME_LEN: usize = 56;
 /// The name this loader looks for.
 const SCREEN_FILE: &[u8] = b"opt/argus/screen";
 
+/// The file on the ESP that overrides the display mode: one line, `WxH`.
+///
+/// This is the documented knob (`\ARGUS\SCREEN.CFG`); `fw_cfg` is only the
+/// hypervisor route to the same hint. Neither is security-relevant: a hint can
+/// pick a smaller mode than the preference list would, and nothing else.
+pub const SCREEN_CFG_PATH: &str = "\\ARGUS\\SCREEN.CFG";
+
 /// Write one word to an I/O port.
 ///
 /// # Safety
@@ -165,8 +172,8 @@ pub fn screen_hint() -> Option<ModeHint> {
     None
 }
 
-/// Parse `WxH` (or `WxH\n`) out of the fw_cfg string.
-fn parse_mode(bytes: &[u8]) -> Option<ModeHint> {
+/// Parse `WxH` (or `WxH\n`) out of the fw_cfg string or `\ARGUS\SCREEN.CFG`.
+pub fn parse_mode(bytes: &[u8]) -> Option<ModeHint> {
     let mut width = 0u32;
     let mut height = 0u32;
     let mut seen_x = false;
