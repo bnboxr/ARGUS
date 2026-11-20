@@ -31,3 +31,10 @@ version = "0.1.0"
 dependencies = [
  "argus-security",
 ]
+
+[[package]]
+name = "bootmenu-preview"
+version = "0.1.0"
+dependencies = [
+ "argus-shared",
+]
