@@ -46,6 +46,7 @@ use core::ptr::{addr_of, addr_of_mut, null_mut};
 use argus_shared::bootinfo::{
     self, BootInfo, DebugSerial, FramebufferInfo, LoaderReserved, MemoryRegion,
 };
+use argus_shared::bootmenu;
 use argus_shared::fbcon::Line;
 use argus_shared::screen;
 use argus_shared::serial::{Serial, COM1};
@@ -709,6 +710,18 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     // every check has passed: a refused boot changes nothing on disk.
     security::commit_boot_state(bs, volume, &boot_state, &manifest, &mut ser);
 
+    // ---- stage: boot manager screen --------------------------------------
+    // A second, optional screen: it is drawn only when `\ARGUS\BOOTMENU.CFG`
+    // exists on the ESP, and it is drawn here — last, with the security chain
+    // already satisfied — so it is the whole screen rather than something the
+    // stage list has to scroll under. The log above has already gone to serial
+    // and stays there. When the file is absent this block does not run, so the
+    // boot log path is byte for byte the one that was already proven.
+    let menu_painted = match draw_boot_menu(bs, image_handle, fb, &mut ser) {
+        MenuOutcome::Painted => true,
+        MenuOutcome::NotRequested | MenuOutcome::Skipped => false,
+    };
+
     // ---- stage: exit boot services --------------------------------------
     let exit_status = exit_boot_services(bs, image_handle, &mut map_key, &mut ser);
     let _ = writeln!(
@@ -723,11 +736,15 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
         screen::refusal("E_EXIT_BOOT_SERVICES");
         halt();
     }
-    on_screen!(
-        "ExitBootServices",
-        "firmware released, map key 0x{:x}",
-        map_key
-    );
+    // With the boot menu on screen, the two log lines below are serial only:
+    // they would otherwise be drawn across the menu the owner is looking at.
+    if !menu_painted {
+        on_screen!(
+            "ExitBootServices",
+            "firmware released, map key 0x{:x}",
+            map_key
+        );
+    }
 
     // The map key that actually worked is the one the kernel needs to reason
     // about the map it was handed, so record it before sealing.
@@ -770,12 +787,16 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, system_table: *mut SystemT
     );
     // The last thing the loader draws. The kernel draws its own banner below
     // this line, so the screen ends up showing both halves of the handoff.
-    on_screen!(
-        "handoff",
-        "jumped to kernel at 0x{:x}, BootInfo 0x{:x}",
-        image.entry,
-        bootinfo_ptr as usize
-    );
+    // With the boot menu on screen, this line is serial only, for the same
+    // reason as the ExitBootServices line above.
+    if !menu_painted {
+        on_screen!(
+            "handoff",
+            "jumped to kernel at 0x{:x}, BootInfo 0x{:x}",
+            image.entry,
+            bootinfo_ptr as usize
+        );
+    }
 
     // SAFETY: the entry point was validated to lie inside an executable
     // PT_LOAD segment that we just copied, in memory the firmware marked
@@ -1297,6 +1318,124 @@ fn read_screen_cfg(
                 len
             );
             None
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Boot manager screen (optional, off unless asked for)
+// ---------------------------------------------------------------------------
+
+/// What happened to the optional boot manager screen.
+enum MenuOutcome {
+    /// `\ARGUS\BOOTMENU.CFG` is not on the ESP: nothing was drawn.
+    NotRequested,
+    /// The menu is on screen.
+    Painted,
+    /// The file is there but this mode cannot carry the measured layout.
+    Skipped,
+}
+
+/// How long the menu is held before the loader launches its default entry.
+///
+/// This is the menu's own timeout — the time a boot manager gives you to pick
+/// something — and nothing is drawn while it runs. It is here because the
+/// screen has to be observable: without it the loader would replace the menu
+/// with the kernel's own block a few milliseconds after drawing it.
+const MENU_HOLD_US: usize = 2_000_000;
+
+/// Draw the boot manager screen if the ESP asks for it.
+fn draw_boot_menu(
+    bs: &BootServices,
+    image_handle: Handle,
+    fb: FramebufferInfo,
+    ser: &mut Serial,
+) -> MenuOutcome {
+    if !bootmenu_requested(bs, image_handle, ser) {
+        return MenuOutcome::NotRequested;
+    }
+    match bootmenu::paint(fb) {
+        Ok(()) => {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=bootmenu event=painted path={} canvas={}x{} atlas={}",
+                bootmenu::CFG_PATH,
+                fb.width,
+                fb.height,
+                "host-generated"
+            );
+            // SAFETY: boot services are still live here — ExitBootServices has
+            // not run yet — and `stall` only spends time.
+            let _ = unsafe { (bs.stall)(MENU_HOLD_US) };
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=bootmenu event=hold result=timeout hold_ms={} action=launch_default",
+                MENU_HOLD_US / 1000
+            );
+            MenuOutcome::Painted
+        }
+        Err(skip) => {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=bootmenu event=skipped path={} reason={}",
+                bootmenu::CFG_PATH,
+                skip.reason()
+            );
+            MenuOutcome::Skipped
+        }
+    }
+}
+
+/// Is `\ARGUS\BOOTMENU.CFG` on the ESP?
+///
+/// Presence is the whole interface; the contents are not read. An absent file,
+/// an unreadable volume and a read error all mean "no" and are logged. Nothing
+/// security-relevant depends on this: the file can only choose which of two
+/// screens the loader paints, and both are drawn after the manifest has been
+/// verified.
+fn bootmenu_requested(bs: &BootServices, image_handle: Handle, ser: &mut Serial) -> bool {
+    let Some(li_ptr) = get_loaded_image(bs, image_handle) else {
+        let _ = writeln!(
+            ser,
+            "[ARGUS-LOADER] stage=bootmenu event=absent reason=no_loaded_image"
+        );
+        return false;
+    };
+    // SAFETY: the firmware just returned a live EFI_LOADED_IMAGE_PROTOCOL for
+    // our own image handle.
+    let li = unsafe { &*li_ptr };
+    let Some(sfs) = probe_sfs(bs, li.device_handle) else {
+        let _ = writeln!(
+            ser,
+            "[ARGUS-LOADER] stage=bootmenu event=absent reason=no_filesystem"
+        );
+        return false;
+    };
+    match security::read_file(bs, sfs, bootmenu::CFG_PATH, 32) {
+        Ok((buf, len)) => {
+            // Presence was the question, not the bytes: give the pool buffer
+            // back rather than holding it until ExitBootServices.
+            if !buf.is_null() {
+                // SAFETY: `read_file` returned a buffer from `allocate_pool`,
+                // and it is freed exactly once here.
+                let _ = unsafe { (bs.free_pool)(buf) };
+            }
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=bootmenu event=present path={} bytes={}",
+                bootmenu::CFG_PATH,
+                len
+            );
+            true
+        }
+        Err(reason) => {
+            let _ = writeln!(
+                ser,
+                "[ARGUS-LOADER] stage=bootmenu event=absent path={} reason={}",
+                bootmenu::CFG_PATH,
+                reason
+            );
+            false
         }
     }
 }

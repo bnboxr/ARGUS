@@ -1,0 +1,13 @@
+[package]
+name = "bootmenu-preview"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Render the boot manager screen on the build host, for looking at it without a VM"
+
+[[bin]]
+name = "bootmenu-preview"
+path = "src/main.rs"
+
+[dependencies]
+argus-shared = { path = "../../shared" }

@@ -45,3 +45,21 @@ arithmetic (see `security/src/bigint.rs`, `mont_mul`).
 Signing (`sign_pkcs1v15_sha256`) exists **only in the host tool** — no CRT, no
 blinding, not constant-time — and must never be linked into the loader or used
 for anything but test manifests.
+
+## Phase I slice 3 (boot manager screen)
+
+**No third-party crates were added.** The screen needs glyphs, and the glyphs are
+baked on the build host rather than rasterised at boot (spec §7: a TrueType
+rasteriser costs 1-3 ms per glyph in a loader with no GPU).
+
+| artifact | kind | source | licence |
+|---|---|---|---|
+| `shared/src/bootmenu_atlas.bin` | generated data, compiled in | `tools/gen-bootmenu-atlas.py` renders **FreeSans / FreeSansBold** (GNU FreeFont) through ffmpeg's `drawtext` at the five cap heights the screen uses | GNU FreeFont is GPL v3 or later **with the font embedding exception**, so the rasterised glyphs may be embedded |
+| `tools/gen-bootmenu-atlas.py` | in-repo host tool, stdlib only | needs `python3` and `ffmpeg` with the `drawtext` filter | in-repo |
+| `tools/bootmenu-preview` | in-repo host binary | depends on `argus-shared` only | in-repo |
+
+The reference PNG names no font and ships none (spec §8), so FreeSans is a
+substitute chosen for shape class, not an identification: both are a
+geometric-ish sans with a near-circular `O`. The generated `.bin` is committed, so
+`./build.sh` needs neither python nor ffmpeg; regenerating it is
+`python3 tools/gen-bootmenu-atlas.py`.

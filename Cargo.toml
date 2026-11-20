@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["shared", "security", "bootloader", "kernel", "tools/sign-manifest"]
+members = ["shared", "security", "bootloader", "kernel", "tools/sign-manifest", "tools/bootmenu-preview"]
 
 [workspace.package]
 version = "0.1.0"

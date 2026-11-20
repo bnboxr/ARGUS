@@ -12,6 +12,7 @@
 #![no_std]
 
 pub mod bootinfo;
+pub mod bootmenu;
 pub mod fbcon;
 pub mod font8x16;
 pub mod screen;
